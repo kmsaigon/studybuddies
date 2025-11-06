@@ -67,7 +67,15 @@
                         <p><strong>Schedule:</strong> {{ listing.get_weekday_display }} {{ listing.start_time|time }} - {{ listing.end_time|time }}</p>
                         {% endif %}
                         <p><strong>Size:</strong> {{ listing.current_size }}/{{ listing.capacity }}</p>
-                        <a href="{% url 'buddies:listing_detail' slug=listing.slug %}" class="btn btn-sm btn-primary">View Details</a>
+                        
+                        <!-- Action Buttons -->
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'buddies:listing_detail' slug=listing.slug %}" class="btn btn-sm btn-primary">View Details</a>
+                            
+                            {% if user.is_authenticated %}
+                                <a href="{% url 'buddies:request_join' slug=listing.slug %}" class="btn btn-sm btn-success">Join</a>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
                 {% endfor %}
@@ -108,5 +116,3 @@
     </div>
 </div>
 {% endblock content %}
-
-

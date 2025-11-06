@@ -12,6 +12,8 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.dateparse import parse_time
 from math import radians, sin, cos, sqrt, atan2
+from django.utils import timezone
+from django.db.models import F
 import json
 
 from .forms import ListingForm, ListingSearchForm
@@ -19,6 +21,32 @@ from .models import BuddyListing, JoinRequest, GroupMembership, Message
 from profiles.models import Profile, University
 from locations.models import Location
 
+
+# Utility function for distance calculation
+def haversine(lat1, lon1, lat2, lon2):
+    """Calculate distance between two points in miles"""
+    from math import radians, cos, sin, asin, sqrt
+    
+    # Convert to radians
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    
+    # Haversine formula
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+    miles = 3956 * c  # Radius of earth in miles
+    return miles
+
+
+def parse_time(time_str):
+    """Parse time string like '18:00' to time object"""
+    from datetime import time
+    try:
+        hour, minute = map(int, time_str.split(':'))
+        return time(hour, minute)
+    except:
+        return None
 
 
 class ListingSearchView(ListView):
@@ -160,8 +188,9 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return R * c
 
-class MyListingsView(ListView):
+class MyListingsView(LoginRequiredMixin, ListView):
     template_name = 'buddies/my_listings.html'
+    context_object_name = 'listings'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -171,28 +200,71 @@ class MyListingsView(ListView):
         return context
     
     def get_queryset(self):
-        return []
+        # Get all listings owned by the current user
+        return BuddyListing.objects.filter(
+            owner=self.request.user
+        ).select_related(
+            'course',
+            'university',
+            'location'
+        ).order_by('-created_at')
 
 
-class MyGroupsView(ListView):
+class MyGroupsView(LoginRequiredMixin, ListView):
     template_name = 'buddies/my_groups.html'
+    context_object_name = 'groups'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         if context is None:
             context = {}
         context['template_data'] = {'title': 'My Groups'}
+        
+        # Add pending join requests
+        context['pending_requests'] = JoinRequest.objects.filter(
+            student=self.request.user,
+            status='requested'
+        ).select_related('listing', 'listing__course', 'listing__university')
+        
+        # Add membership info for each group
+        memberships = GroupMembership.objects.filter(
+            student=self.request.user,
+            left_at__isnull=True
+        ).select_related('listing')
+        
+        context['memberships'] = {m.listing.id: m for m in memberships}
+        
         return context
     
     def get_queryset(self):
-        return []
+        # Get all active memberships for the current user
+        memberships = GroupMembership.objects.filter(
+            student=self.request.user,
+            left_at__isnull=True
+        ).select_related(
+            'listing',
+            'listing__course',
+            'listing__university',
+            'listing__location',
+            'listing__owner'
+        ).order_by('-joined_at')
+        
+        # Return the listings from these memberships
+        return [membership.listing for membership in memberships]
 
 
-class ListingCreateView(CreateView):
+class ListingCreateView(LoginRequiredMixin, CreateView):
     model = BuddyListing
     form_class = ListingForm
     template_name = 'buddies/listing_form.html'
     success_url = reverse_lazy('buddies:my_listings')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if context is None:
+            context = {}
+        context['template_data'] = {'title': 'Create Listing'}
+        return context
     
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -204,19 +276,24 @@ class ListingCreateView(CreateView):
         # Set university from course if not set
         if not form.instance.university and form.instance.course:
             form.instance.university = form.instance.course.university
+        # Save the listing
+        response = super().form_valid(form)
         # Create initial membership for owner
-        listing = form.save()
         GroupMembership.objects.create(
-            listing=listing,
+            listing=self.object,
             student=self.request.user,
             role='owner'
         )
         messages.success(self.request, 'Listing created successfully!')
-        return super().form_valid(form)
+        return response
 
 
-class ListingUpdateView(UpdateView):
+class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    model = BuddyListing
+    form_class = ListingForm
     template_name = 'buddies/listing_form.html'
+    slug_field = 'slug'
+    slug_url_kwarg = 'slug'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -225,8 +302,17 @@ class ListingUpdateView(UpdateView):
         context['template_data'] = {'title': 'Edit Listing'}
         return context
     
-    def get_object(self):
-        return None
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+    
+    def test_func(self):
+        listing = self.get_object()
+        return listing.owner == self.request.user
+    
+    def get_success_url(self):
+        return reverse('buddies:listing_detail', kwargs={'slug': self.object.slug})
 
 
 class ListingDetailView(DetailView):
@@ -245,106 +331,220 @@ class ListingDetailView(DetailView):
         
         # Check if user can join
         if self.request.user.is_authenticated:
-            context['can_join'] = self._can_join(listing)
             context['is_member'] = listing.memberships.filter(
                 student=self.request.user,
                 left_at__isnull=True
             ).exists()
             context['is_owner'] = listing.owner == self.request.user
-            context['has_requested'] = listing.join_requests.filter(
+            
+            # Check for existing join request
+            existing_request = listing.join_requests.filter(
                 student=self.request.user,
-                status='requested'
-            ).exists()
+                status__in=['requested', 'waitlisted']
+            ).first()
+            context['has_requested'] = existing_request is not None
+            context['join_request'] = existing_request
+            
+            # Can join if: not a member, not owner, hasn't requested, and group is open
+            context['can_join'] = (
+                not context['is_member'] and 
+                not context['is_owner'] and 
+                not context['has_requested'] and
+                listing.status == 'open'
+            )
         
         # Get members
-        context['members'] = listing.memberships.filter(left_at__isnull=True).select_related('student')
+        context['members'] = listing.memberships.filter(
+            left_at__isnull=True
+        ).select_related('student', 'student__profile')
+        
+        # Get member count
+        context['member_count'] = context['members'].count()
+        context['spots_available'] = listing.capacity - context['member_count']
         
         return context
-    
-    def _can_join(self, listing):
-        """Check if user can join the listing"""
-        if not self.request.user.is_authenticated:
-            return False
-        if listing.status != 'open' or listing.current_size >= listing.capacity:
-            return False
-        if listing.memberships.filter(student=self.request.user, left_at__isnull=True).exists():
-            return False
-        if listing.join_requests.filter(student=self.request.user, status='requested').exists():
-            return False
-        return True
 
-    
-class ListingCreateView(LoginRequiredMixin, CreateView):
-    model = BuddyListing
-    form_class = ListingForm
-    template_name = 'buddies/listing_form.html'
-    success_url = reverse_lazy('buddies:my_listings')
-    
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        return kwargs
-    
-    def form_valid(self, form):
-        form.instance.owner = self.request.user
-        # Set university from course if not set
-        if not form.instance.university and form.instance.course:
-            form.instance.university = form.instance.course.university
-        # Create initial membership for owner
-        listing = form.save()
-        GroupMembership.objects.create(
-            listing=listing,
-            student=self.request.user,
-            role='owner'
-        )
-        messages.success(self.request, 'Listing created successfully!')
-        return super().form_valid(form)
+
 @login_required
-def listing_map(request):
-    """Map view of study group listings"""
-    context = {
-        'template_data': {
-            'title': 'Study Groups Map',
-            'GOOGLE_MAPS_API_KEY': settings.GOOGLE_MAPS_API_KEY,
-        }
-    }
-    return render(request, 'buddies/map.html', context)
+def request_join(request, slug):
+    """Handle join request submission"""
+    listing = get_object_or_404(BuddyListing, slug=slug)
+    
+    # Check if user is already a member
+    if listing.memberships.filter(student=request.user, left_at__isnull=True).exists():
+        messages.warning(request, 'You are already a member of this group.')
+        return redirect('buddies:listing_detail', slug=slug)
+    
+    # Check if user is the owner
+    if listing.owner == request.user:
+        messages.warning(request, 'You cannot join your own listing.')
+        return redirect('buddies:listing_detail', slug=slug)
+    
+    # Check if listing is open
+    if listing.status != 'open':
+        messages.error(request, 'This listing is not accepting new members.')
+        return redirect('buddies:listing_detail', slug=slug)
+    
+    # Check for existing request
+    existing_request = JoinRequest.objects.filter(
+        listing=listing,
+        student=request.user,
+        status__in=['requested', 'waitlisted']
+    ).first()
+    
+    if existing_request:
+        messages.warning(request, 'You have already requested to join this group.')
+        return redirect('buddies:listing_detail', slug=slug)
+    
+    if request.method == 'POST':
+        message_text = request.POST.get('message', '').strip()
+        
+        # Check capacity
+        current_members = listing.memberships.filter(left_at__isnull=True).count()
+        
+        if listing.join_policy == 'auto_accept':
+            # Auto-accept if there's space
+            if current_members < listing.capacity:
+                # Create membership directly
+                GroupMembership.objects.create(
+                    listing=listing,
+                    student=request.user,
+                    role='member'
+                )
+                
+                # Update current_size
+                listing.current_size = current_members + 1
+                if listing.current_size >= listing.capacity:
+                    listing.status = 'filled'
+                listing.save()
+                
+                # Create an auto-accepted join request for record-keeping
+                JoinRequest.objects.create(
+                    listing=listing,
+                    student=request.user,
+                    message=message_text,
+                    status='accepted'
+                )
+                
+                messages.success(request, f'You have successfully joined "{listing.title}"!')
+                return redirect('buddies:my_groups')
+            else:
+                # Create waitlisted request
+                JoinRequest.objects.create(
+                    listing=listing,
+                    student=request.user,
+                    message=message_text,
+                    status='waitlisted'
+                )
+                messages.info(request, 'This group is full. You have been added to the waitlist.')
+                return redirect('buddies:listing_detail', slug=slug)
+        else:
+            # Owner approval required
+            status = 'requested' if current_members < listing.capacity else 'waitlisted'
+            JoinRequest.objects.create(
+                listing=listing,
+                student=request.user,
+                message=message_text,
+                status=status
+            )
+            
+            if status == 'waitlisted':
+                messages.info(request, 'This group is full. Your request has been added to the waitlist.')
+            else:
+                messages.success(request, 'Your join request has been submitted. The owner will review it shortly.')
+            
+            return redirect('buddies:listing_detail', slug=slug)
+    
+    # GET request - show join request form
+    template_data = {'title': f'Join {listing.title}'}
+    return render(request, 'buddies/join_request.html', {
+        'template_data': template_data,
+        'listing': listing
+    })
 
 
-@csrf_exempt
-def api_filter_by_distance(request):
-    """Return listings within a given distance"""
-    try:
-        lat = float(request.GET.get('lat'))
-        lng = float(request.GET.get('lng'))
-        max_distance = float(request.GET.get('distance', 10))
-    except (TypeError, ValueError):
-        return JsonResponse({'error': 'Invalid coordinates'}, status=400)
+@login_required
+def withdraw_request(request, slug):
+    """Withdraw a pending join request"""
+    listing = get_object_or_404(BuddyListing, slug=slug)
     
-    listings = BuddyListing.objects.filter(
-        status='open',
-        location__isnull=False,
-        location__latitude__isnull=False,
-        location__longitude__isnull=False
-    ).select_related('location', 'course', 'university')
+    if request.method == 'POST':
+        join_request = get_object_or_404(
+            JoinRequest,
+            listing=listing,
+            student=request.user,
+            status__in=['requested', 'waitlisted']
+        )
+        
+        join_request.status = 'withdrawn'
+        join_request.save()
+        
+        messages.success(request, 'Your join request has been withdrawn.')
+        return redirect('buddies:listing_detail', slug=slug)
     
-    filtered_listings = []
-    for listing in listings:
-        dist = haversine(lat, lng, float(listing.location.latitude), float(listing.location.longitude))
-        if dist <= max_distance:
-            filtered_listings.append({
-                'id': listing.id,
-                'slug': listing.slug,
-                'title': listing.title,
-                'course': listing.course.code,
-                'latitude': float(listing.location.latitude),
-                'longitude': float(listing.location.longitude),
-                'distance': round(dist, 2),
-                'current_size': listing.current_size,
-                'capacity': listing.capacity,
-            })
+    return redirect('buddies:listing_detail', slug=slug)
+
+
+@login_required
+def leave_group(request, slug):
+    """Leave a study group"""
+    listing = get_object_or_404(BuddyListing, slug=slug)
     
-    return JsonResponse({'listings': filtered_listings})
+    # Check if user is a member
+    membership = get_object_or_404(
+        GroupMembership,
+        listing=listing,
+        student=request.user,
+        left_at__isnull=True
+    )
+    
+    # Owner cannot leave their own group
+    if membership.role == 'owner':
+        messages.error(request, 'As the owner, you cannot leave this group. You can cancel the listing instead.')
+        return redirect('buddies:listing_detail', slug=slug)
+    
+    if request.method == 'POST':
+        # Mark membership as left
+        membership.left_at = timezone.now()
+        membership.save()
+        
+        # Update current_size
+        listing.current_size = listing.memberships.filter(left_at__isnull=True).count()
+        
+        # If group was filled, reopen it
+        if listing.status == 'filled' and listing.current_size < listing.capacity:
+            listing.status = 'open'
+        
+        listing.save()
+        
+        # Check if there are waitlisted requests to promote
+        if listing.status == 'open':
+            waitlisted = listing.join_requests.filter(status='waitlisted').first()
+            if waitlisted and listing.join_policy == 'auto_accept':
+                # Auto-promote from waitlist
+                GroupMembership.objects.create(
+                    listing=listing,
+                    student=waitlisted.student,
+                    role='member'
+                )
+                waitlisted.status = 'accepted'
+                waitlisted.save()
+                
+                listing.current_size += 1
+                if listing.current_size >= listing.capacity:
+                    listing.status = 'filled'
+                listing.save()
+        
+        messages.success(request, f'You have left "{listing.title}".')
+        return redirect('buddies:my_groups')
+    
+    # GET request - show confirmation page
+    template_data = {'title': f'Leave {listing.title}'}
+    return render(request, 'buddies/leave_confirm.html', {
+        'template_data': template_data,
+        'listing': listing
+    })
+
 
 @login_required
 def request_thread(request, pk):
@@ -354,61 +554,189 @@ def request_thread(request, pk):
 
 @login_required
 def close_listing(request, slug):
-    template_data = {'title': 'Close Listing'}
-    return render(request, 'buddies/list.html', {'template_data': template_data})
+    """Close a listing (mark as filled)"""
+    listing = get_object_or_404(BuddyListing, slug=slug, owner=request.user)
+    
+    if request.method == 'POST':
+        listing.status = 'filled'
+        listing.save()
+        messages.success(request, 'Listing has been closed.')
+        return redirect('buddies:listing_detail', slug=slug)
+    
+    return redirect('buddies:listing_detail', slug=slug)
 
 
 @login_required
 def cancel_listing(request, slug):
-    template_data = {'title': 'Cancel Listing'}
-    return render(request, 'buddies/list.html', {'template_data': template_data})
+    """Cancel a listing"""
+    listing = get_object_or_404(BuddyListing, slug=slug, owner=request.user)
+    
+    if request.method == 'POST':
+        listing.status = 'cancelled'
+        listing.save()
+        
+        # Notify all members
+        messages.success(request, 'Listing has been cancelled.')
+        return redirect('buddies:my_listings')
+    
+    return redirect('buddies:listing_detail', slug=slug)
 
 
 @login_required
 def roster_view(request, slug):
-    template_data = {'title': 'Roster'}
-    return render(request, 'buddies/roster.html', {'template_data': template_data})
+    """View all members of a study group"""
+    listing = get_object_or_404(BuddyListing, slug=slug)
+    
+    # Check if user is a member or owner
+    is_member = listing.memberships.filter(
+        student=request.user,
+        left_at__isnull=True
+    ).exists()
+    
+    if not is_member and listing.owner != request.user:
+        messages.error(request, 'You must be a member to view the roster.')
+        return redirect('buddies:listing_detail', slug=slug)
+    
+    members = listing.memberships.filter(
+        left_at__isnull=True
+    ).select_related('student', 'student__profile').order_by('-role', 'joined_at')
+    
+    template_data = {'title': f'Roster - {listing.title}'}
+    return render(request, 'buddies/roster.html', {
+        'template_data': template_data,
+        'listing': listing,
+        'members': members
+    })
 
 
 @login_required
 def requests_queue(request, slug):
-    template_data = {'title': 'Join Requests'}
-    return render(request, 'buddies/requests_queue.html', {'template_data': template_data})
+    """View pending join requests (owner only)"""
+    listing = get_object_or_404(BuddyListing, slug=slug, owner=request.user)
+    
+    pending_requests = listing.join_requests.filter(
+        status__in=['requested', 'waitlisted']
+    ).select_related('student', 'student__profile').order_by('created_at')
+    
+    template_data = {'title': f'Join Requests - {listing.title}'}
+    return render(request, 'buddies/requests_queue.html', {
+        'template_data': template_data,
+        'listing': listing,
+        'requests': pending_requests
+    })
 
 
 @login_required
 def request_decision(request, slug, pk):
-    template_data = {'title': 'Request Decision'}
-    return render(request, 'buddies/requests_queue.html', {'template_data': template_data})
+    """Accept or decline a join request (owner only)"""
+    listing = get_object_or_404(BuddyListing, slug=slug, owner=request.user)
+    join_request = get_object_or_404(JoinRequest, pk=pk, listing=listing)
+    
+    if request.method == 'POST':
+        decision = request.POST.get('decision')
+        
+        if decision == 'accept':
+            # Check capacity
+            current_members = listing.memberships.filter(left_at__isnull=True).count()
+            
+            if current_members < listing.capacity:
+                # Create membership
+                GroupMembership.objects.create(
+                    listing=listing,
+                    student=join_request.student,
+                    role='member'
+                )
+                
+                # Update request status
+                join_request.status = 'accepted'
+                join_request.save()
+                
+                # Update listing
+                listing.current_size = current_members + 1
+                if listing.current_size >= listing.capacity:
+                    listing.status = 'filled'
+                listing.save()
+                
+                messages.success(request, f'{join_request.student.username} has been added to the group.')
+            else:
+                messages.error(request, 'The group is full.')
+        
+        elif decision == 'decline':
+            join_request.status = 'declined'
+            join_request.save()
+            messages.success(request, 'Join request has been declined.')
+        
+        return redirect('buddies:requests_queue', slug=slug)
+    
+    return redirect('buddies:requests_queue', slug=slug)
 
 
 @login_required
 def remove_member(request, slug, user_id):
-    template_data = {'title': 'Remove Member'}
-    return render(request, 'buddies/roster.html', {'template_data': template_data})
-
-
-@login_required
-def request_join(request, slug):
-    template_data = {'title': 'Join Request'}
-    return render(request, 'buddies/join_request.html', {'template_data': template_data})
-
-
-@login_required
-def withdraw_request(request, slug):
-    template_data = {'title': 'Withdraw Request'}
-    return render(request, 'buddies/list.html', {'template_data': template_data})
-
-
-@login_required
-def leave_group(request, slug):
-    template_data = {'title': 'Leave Group'}
-    return render(request, 'buddies/my_groups.html', {'template_data': template_data})
+    """Remove a member from the group (owner only)"""
+    listing = get_object_or_404(BuddyListing, slug=slug, owner=request.user)
+    
+    if request.method == 'POST':
+        membership = get_object_or_404(
+            GroupMembership,
+            listing=listing,
+            student__id=user_id,
+            left_at__isnull=True
+        )
+        
+        # Cannot remove owner
+        if membership.role == 'owner':
+            messages.error(request, 'Cannot remove the owner.')
+            return redirect('buddies:roster', slug=slug)
+        
+        # Mark as left
+        membership.left_at = timezone.now()
+        membership.save()
+        
+        # Update listing
+        listing.current_size = listing.memberships.filter(left_at__isnull=True).count()
+        if listing.status == 'filled' and listing.current_size < listing.capacity:
+            listing.status = 'open'
+        listing.save()
+        
+        messages.success(request, 'Member has been removed.')
+        return redirect('buddies:roster', slug=slug)
+    
+    return redirect('buddies:roster', slug=slug)
 
 
 @login_required
 def group_chat(request, slug):
-    template_data = {'title': 'Group Chat'}
-    return render(request, 'buddies/group_chat.html', {'template_data': template_data})
-
-
+    """Group chat for members"""
+    listing = get_object_or_404(BuddyListing, slug=slug)
+    
+    # Check if user is a member
+    is_member = listing.memberships.filter(
+        student=request.user,
+        left_at__isnull=True
+    ).exists()
+    
+    if not is_member and listing.owner != request.user:
+        messages.error(request, 'You must be a member to access the group chat.')
+        return redirect('buddies:listing_detail', slug=slug)
+    
+    if request.method == 'POST':
+        message_text = request.POST.get('message', '').strip()
+        if message_text:
+            Message.objects.create(
+                listing=listing,
+                sender=request.user,
+                body=message_text
+            )
+            messages.success(request, 'Message sent.')
+            return redirect('buddies:group_chat', slug=slug)
+    
+    # Get all messages for this listing
+    chat_messages = listing.messages.select_related('sender').order_by('created_at')
+    
+    template_data = {'title': f'Chat - {listing.title}'}
+    return render(request, 'buddies/group_chat.html', {
+        'template_data': template_data,
+        'listing': listing,
+        'messages': chat_messages
+    })

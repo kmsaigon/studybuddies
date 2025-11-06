@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <!-- Back Button -->
+            <div class="mb-3">
+                <a href="{% url 'buddies:listing_detail' listing.slug %}" class="btn btn-sm btn-outline-secondary">
+                    ← Back to Group Details
+                </a>
+            </div>
+            
+            <!-- Main Card -->
+            <div class="card shadow border-danger">
+                <div class="card-body text-center">
+                    <!-- Warning Icon -->
+                    <div class="mb-4">
+                        <div class="d-inline-flex align-items-center justify-content-center bg-danger bg-opacity-10 rounded-circle" style="width: 80px; height: 80px;">
+                            <svg width="40" height="40" fill="currentColor" class="text-danger" viewBox="0 0 16 16">
+                                <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <!-- Title -->
+                    <h3 class="mb-2">Leave Study Group</h3>
+                    <p class="text-muted mb-4">Are you sure you want to leave this group?</p>
+                    
+                    <!-- Group Info -->
+                    <div class="card bg-light mb-4 text-start">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ listing.title }}</h5>
+                            <p class="card-text mb-1"><strong>Course:</strong> {{ listing.course.code }}</p>
+                            <p class="card-text mb-1"><strong>University:</strong> {{ listing.university.name }}</p>
+                            <p class="card-text mb-0"><strong>Members:</strong> {{ listing.current_size }}/{{ listing.capacity }}</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Warning Message -->
+                    <div class="alert alert-warning text-start">
+                        <h6 class="alert-heading">⚠️ Important Notice:</h6>
+                        <ul class="mb-0 ps-3">
+                            <li>You will lose access to the group chat immediately</li>
+                            <li>You won't receive any future notifications from this group</li>
+                            <li>You may need to request to join again if you change your mind</li>
+                            {% if listing.join_policy == 'owner_approve' %}
+                            <li>Rejoining will require owner approval</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <form method="post" action="{% url 'buddies:leave_group' listing.slug %}">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-danger btn-lg">
+                                Yes, Leave Group
+                            </button>
+                            <a href="{% url 'buddies:listing_detail' listing.slug %}" class="btn btn-outline-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                    
+                    <!-- Alternative Options -->
+                    <div class="mt-4 pt-4 border-top text-start">
+                        <p class="text-muted mb-3"><strong>Having issues with the group?</strong> Consider these alternatives:</p>
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'buddies:group_chat' listing.slug %}" class="btn btn-sm btn-outline-primary">
+                                Talk to the group
+                            </a>
+                            {% if listing.owner != user %}
+                            <a href="{% url 'buddies:listing_detail' listing.slug %}" class="btn btn-sm btn-outline-primary">
+                                Message the owner
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

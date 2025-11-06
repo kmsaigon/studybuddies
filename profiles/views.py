@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.db.models import Q
 from .models import Profile, Course, University
 from .forms import ProfileEditForm
+from buddies.models import GroupMembership, JoinRequest
 
 
 @login_required
@@ -46,11 +47,36 @@ def detail(request):
     """View the user's profile"""
     profile = get_object_or_404(Profile, user=request.user)
     
+    # Get active memberships
+    memberships = GroupMembership.objects.filter(
+        student=request.user,
+        left_at__isnull=True
+    ).select_related(
+        'listing',
+        'listing__course',
+        'listing__university'
+    ).order_by('-joined_at')
+    
+    my_groups = [m.listing for m in memberships]
+    
+    # Get pending join requests
+    pending_requests = JoinRequest.objects.filter(
+        student=request.user,
+        status__in=['requested', 'waitlisted']
+    ).select_related(
+        'listing',
+        'listing__course'
+    ).order_by('-created_at')
+    
     context = {
         'template_data': {
             'profile': profile,
             'title': 'My Profile'
-        }
+        },
+        'profile': profile,
+        'my_groups': my_groups,
+        'memberships': memberships,
+        'pending_requests': pending_requests,
     }
     return render(request, 'profiles/detail.html', context)
 

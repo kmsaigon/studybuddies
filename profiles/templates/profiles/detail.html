@@ -1,13 +1,225 @@
 {% extends 'base.html' %}
+
 {% block content %}
-<div class="p-3">
-    <div class="container">
-        <div class="row mt-3">
-            <div class="col-md-8 mx-auto text-center">
-                <h2 class="mb-4">This page is under construction</h2>
+<div class="container mt-4">
+    <div class="row">
+        <!-- Main Profile Section -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">My Profile</h3>
+                </div>
+                <div class="card-body">
+                    {% if profile.avatar %}
+                    <img src="{{ profile.avatar.url }}" alt="{{ profile.full_name }}" class="rounded-circle mb-3" style="width: 100px; height: 100px; object-fit: cover;">
+                    {% else %}
+                    <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-3" style="width: 100px; height: 100px; font-size: 48px;">
+                        {{ profile.full_name|first|upper }}
+                    </div>
+                    {% endif %}
+                    
+                    <h4>{{ profile.full_name }}</h4>
+                    <p class="text-muted">@{{ profile.user.username }}</p>
+                    
+                    <hr>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>🏫 University:</strong><br>{{ profile.university.name }}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>📚 Grade Level:</strong><br>{{ profile.get_grade_level_display }}
+                        </div>
+                    </div>
+                    
+                    {% if profile.major %}
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <strong>🎓 Major:</strong><br>{{ profile.major }}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>💻 Modality Preference:</strong><br>{{ profile.get_modality_pref_display }}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>🚗 Commute Radius:</strong><br>{{ profile.commute_radius_miles }} miles
+                        </div>
+                    </div>
+                    
+                    {% if profile.campus_name %}
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <strong>📍 Campus Location:</strong><br>{{ profile.campus_name }}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if profile.study_prefs %}
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <strong>✏️ Study Preferences:</strong><br>{{ profile.study_prefs }}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <hr>
+                    <a href="{% url 'profiles:profiles.edit' %}" class="btn btn-primary">Edit Profile</a>
+                </div>
+            </div>
+            
+            <!-- Current Courses -->
+            {% if profile.current_courses.all %}
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">📖 Current Courses</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for course in profile.current_courses.all %}
+                        <div class="list-group-item">
+                            <strong>{{ course.code }}</strong> - {{ course.name }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- MY STUDY GROUPS SECTION -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">👥 My Study Groups</h5>
+                    <a href="{% url 'buddies:my_groups' %}" class="btn btn-sm btn-light">View All</a>
+                </div>
+                <div class="card-body">
+                    {% if my_groups %}
+                        <!-- Active Groups -->
+                        <h6 class="mb-3">Active Groups ({{ my_groups|length }})</h6>
+                        <div class="list-group mb-4">
+                            {% for listing in my_groups %}
+                            <a href="{% url 'buddies:listing_detail' slug=listing.slug %}" class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100 justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-1">{{ listing.title }}</h6>
+                                        <small class="text-muted">
+                                            {{ listing.course.code }} • {{ listing.get_modality_display }}
+                                            {% if listing.weekday %}
+                                            • {{ listing.get_weekday_display }}
+                                            {% if listing.start_time %}
+                                            {{ listing.start_time|time:"g:i A" }}
+                                            {% endif %}
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                    <div>
+                                        {% for membership in memberships %}
+                                            {% if membership.listing.id == listing.id %}
+                                                {% if membership.role == 'owner' %}
+                                                <span class="badge bg-warning text-dark">👑 Owner</span>
+                                                {% else %}
+                                                <span class="badge bg-success">Member</span>
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    {% if pending_requests %}
+                        <!-- Pending Requests -->
+                        <h6 class="mb-3">⏳ Pending Requests ({{ pending_requests|length }})</h6>
+                        <div class="list-group mb-3">
+                            {% for request in pending_requests %}
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-1">
+                                            <a href="{% url 'buddies:listing_detail' request.listing.slug %}">{{ request.listing.title }}</a>
+                                        </h6>
+                                        <small class="text-muted">
+                                            {{ request.listing.course.code }} • 
+                                            Requested {{ request.created_at|date:"M d, Y" }}
+                                        </small>
+                                    </div>
+                                    <span class="badge bg-warning text-dark">{{ request.get_status_display }}</span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    {% if not my_groups and not pending_requests %}
+                        <!-- Empty State -->
+                        <div class="text-center py-4">
+                            <div class="mb-3">
+                                <svg width="60" height="60" fill="currentColor" class="text-muted" viewBox="0 0 16 16">
+                                    <path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1h8zm-7.978-1A.261.261 0 0 1 7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002a.274.274 0 0 1-.014.002H7.022zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM6.936 9.28a5.88 5.88 0 0 0-1.23-.247A7.35 7.35 0 0 0 5 9c-4 0-5 3-5 4 0 .667.333 1 1 1h4.216A2.238 2.238 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816zM4.92 10A5.493 5.493 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275zM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0zm3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+                                </svg>
+                            </div>
+                            <h5 class="text-muted">No Study Groups Yet</h5>
+                            <p class="text-muted mb-3">You haven't joined any study groups yet.</p>
+                            <a href="{% url 'buddies:listing_search' %}" class="btn btn-primary">
+                                Find a Study Group
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">📊 Quick Stats</h5>
+                    <hr>
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-3 pb-3 border-bottom">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>Active Groups</span>
+                                <span class="badge bg-success rounded-pill">{{ my_groups|length|default:0 }}</span>
+                            </div>
+                        </li>
+                        <li class="mb-3 pb-3 border-bottom">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>Pending Requests</span>
+                                <span class="badge bg-warning text-dark rounded-pill">{{ pending_requests|length|default:0 }}</span>
+                            </div>
+                        </li>
+                        <li class="mb-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>Current Courses</span>
+                                <span class="badge bg-info rounded-pill">{{ profile.current_courses.count }}</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">🚀 Quick Actions</h5>
+                    <hr>
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'buddies:listing_search' %}" class="btn btn-outline-primary btn-sm">
+                            Find Study Groups
+                        </a>
+                        <a href="{% url 'buddies:my_groups' %}" class="btn btn-outline-success btn-sm">
+                            View My Groups
+                        </a>
+                        <a href="{% url 'buddies:listing_create' %}" class="btn btn-outline-info btn-sm">
+                            Create New Group
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 {% endblock content %}
-
