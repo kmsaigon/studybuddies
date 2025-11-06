@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load buddy_extras %}
 
 {% block content %}
 <div class="container mt-4">
@@ -31,35 +30,92 @@
                 {% endfor %}
             </ul>
             
-            {% if is_owner %}
-            <div class="mt-4">
-                <a href="{% url 'buddies:listing_edit' slug=listing.slug %}" class="btn btn-primary">Edit Listing</a>
-                <a href="{% url 'buddies:roster' slug=listing.slug %}" class="btn btn-secondary">Manage Roster</a>
-                <a href="{% url 'buddies:requests_queue' slug=listing.slug %}" class="btn btn-info">View Requests</a>
-                {% if listing.status == 'open' %}
-                <a href="{% url 'buddies:close_listing' slug=listing.slug %}" class="btn btn-warning">Close Listing</a>
+            <!-- ENHANCED BUTTONS SECTION -->
+            <hr>
+            {% if user.is_authenticated %}
+                {% if is_owner %}
+                    <!-- Owner Controls -->
+                    <div class="alert alert-info">
+                        <strong>👑 You own this group</strong>
+                    </div>
+                    <div class="mt-4">
+                        <a href="{% url 'buddies:listing_edit' slug=listing.slug %}" class="btn btn-primary">Edit Listing</a>
+                        <a href="{% url 'buddies:roster' slug=listing.slug %}" class="btn btn-secondary">Manage Roster</a>
+                        <a href="{% url 'buddies:requests_queue' slug=listing.slug %}" class="btn btn-info">View Requests</a>
+                        <a href="{% url 'buddies:group_chat' slug=listing.slug %}" class="btn btn-success">Group Chat</a>
+                        {% if listing.status == 'open' %}
+                        <form method="post" action="{% url 'buddies:close_listing' slug=listing.slug %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-warning">Close Listing</button>
+                        </form>
+                        {% endif %}
+                        <form method="post" action="{% url 'buddies:cancel_listing' slug=listing.slug %}" style="display:inline;" onsubmit="return confirm('Are you sure you want to cancel this listing?')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger">Cancel Listing</button>
+                        </form>
+                    </div>
+                    
+                {% elif is_member %}
+                    <!-- Member Controls -->
+                    <div class="alert alert-success">
+                        <strong>✓ You are a member of this group</strong>
+                    </div>
+                    <div class="mt-4">
+                        <a href="{% url 'buddies:group_chat' slug=listing.slug %}" class="btn btn-primary">Group Chat</a>
+                        <a href="{% url 'buddies:roster' slug=listing.slug %}" class="btn btn-secondary">View Members</a>
+                        <a href="{% url 'buddies:leave_group' slug=listing.slug %}" class="btn btn-danger">Leave Group</a>
+                    </div>
+                    
+                {% elif has_requested %}
+                    <!-- Pending Request -->
+                    <div class="alert alert-warning">
+                        <strong>⏳ Your join request is pending</strong>
+                        {% if join_request.status == 'waitlisted' %}
+                        <br><small>You are currently on the waitlist.</small>
+                        {% else %}
+                        <br><small>Waiting for owner approval.</small>
+                        {% endif %}
+                    </div>
+                    <div class="mt-4">
+                        <form method="post" action="{% url 'buddies:withdraw_request' slug=listing.slug %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-warning">Withdraw Request</button>
+                        </form>
+                    </div>
+                    
+                {% elif can_join %}
+                    <!-- Can Join -->
+                    {% if spots_available <= 3 and spots_available > 0 %}
+                    <div class="alert alert-warning">
+                        <strong>⚡ Only {{ spots_available }} spot{{ spots_available|pluralize }} left!</strong>
+                    </div>
+                    {% endif %}
+                    <div class="mt-4">
+                        <a href="{% url 'buddies:request_join' slug=listing.slug %}" class="btn btn-success btn-lg">Join Study Group</a>
+                    </div>
+                    
+                {% elif listing.status != 'open' %}
+                    <!-- Closed/Cancelled -->
+                    <div class="alert alert-secondary">
+                        {% if listing.status == 'filled' %}
+                        <strong>🚫 This group is currently full</strong>
+                        {% elif listing.status == 'cancelled' %}
+                        <strong>❌ This group has been cancelled</strong>
+                        {% endif %}
+                    </div>
                 {% endif %}
-                <a href="{% url 'buddies:cancel_listing' slug=listing.slug %}" class="btn btn-danger">Cancel Listing</a>
-            </div>
-            {% elif is_member %}
-            <div class="mt-4">
-                <a href="{% url 'buddies:group_chat' slug=listing.slug %}" class="btn btn-primary">Group Chat</a>
-                <a href="{% url 'buddies:leave_group' slug=listing.slug %}" class="btn btn-danger">Leave Group</a>
-            </div>
-            {% elif can_join %}
-            <div class="mt-4">
-                <a href="{% url 'buddies:request_join' slug=listing.slug %}" class="btn btn-success">Join Group</a>
-            </div>
-            {% elif has_requested %}
-            <div class="mt-4">
-                <p class="text-info">You have requested to join this group.</p>
-                <a href="{% url 'buddies:withdraw_request' slug=listing.slug %}" class="btn btn-warning">Withdraw Request</a>
-            </div>
+            {% else %}
+                <!-- Not Authenticated -->
+                <div class="alert alert-info">
+                    <strong>Sign in to join this study group</strong>
+                </div>
+                <div class="mt-4">
+                    <a href="{% url 'account_login' %}?next={{ request.path }}" class="btn btn-primary">Sign In</a>
+                </div>
             {% endif %}
+            <!-- END ENHANCED BUTTONS SECTION -->
+            
         </div>
     </div>
 </div>
 {% endblock content %}
-
-
-
