@@ -4,8 +4,14 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
+from django.db.models import Q, Count, F
+from django.core.paginator import Paginator
 from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.dateparse import parse_time
+from math import radians, sin, cos, sqrt, atan2
 import json
 
 from .forms import ListingForm, ListingSearchForm
@@ -130,16 +136,29 @@ class ListingSearchView(ListView):
             queryset = queryset.order_by(sort_by)
         
         return queryset
+    def get_context_data(self, **kwargs):
+            context = super().get_context_data(**kwargs)
+            context['form'] = ListingSearchForm(self.request.GET)
+            context['GOOGLE_MAPS_API_KEY'] = settings.GOOGLE_MAPS_API_KEY
+            
+            # Add user's current groups if authenticated
+            if self.request.user.is_authenticated:
+                context['my_groups'] = GroupMembership.objects.filter(
+                    student=self.request.user,
+                    left_at__isnull=True
+                ).select_related('listing')
+            
+            return context
 
-
-def listing_map(request):
-    template_data = {'title': 'Study Groups Map'}
-    return render(request, 'buddies/map.html', {'template_data': template_data})
-
-
-def api_filter_by_distance(request):
-    return JsonResponse({'listings': []})
-
+def haversine(lat1, lon1, lat2, lon2):
+    """Calculate the distance (miles) between two lat/lon points."""
+    R = 3958.8  # Radius of Earth in miles
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return R * c
 
 class MyListingsView(ListView):
     template_name = 'buddies/my_listings.html'
@@ -170,17 +189,30 @@ class MyGroupsView(ListView):
 
 
 class ListingCreateView(CreateView):
+    model = BuddyListing
+    form_class = ListingForm
     template_name = 'buddies/listing_form.html'
+    success_url = reverse_lazy('buddies:my_listings')
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        if context is None:
-            context = {}
-        context['template_data'] = {'title': 'Create Listing'}
-        return context
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
     
-    def get_object(self):
-        return None
+    def form_valid(self, form):
+        form.instance.owner = self.request.user
+        # Set university from course if not set
+        if not form.instance.university and form.instance.course:
+            form.instance.university = form.instance.course.university
+        # Create initial membership for owner
+        listing = form.save()
+        GroupMembership.objects.create(
+            listing=listing,
+            student=self.request.user,
+            role='owner'
+        )
+        messages.success(self.request, 'Listing created successfully!')
+        return super().form_valid(form)
 
 
 class ListingUpdateView(UpdateView):
@@ -198,15 +230,50 @@ class ListingUpdateView(UpdateView):
 
 
 class ListingDetailView(DetailView):
+   class ListingDetailView(DetailView):
+    model = BuddyListing
     template_name = 'buddies/detail.html'
+    context_object_name = 'listing'
+    slug_field = 'slug'
+    slug_url_kwarg = 'slug'
+    
+    def get_queryset(self):
+        return BuddyListing.objects.select_related('course', 'university', 'location', 'owner')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['template_data'] = {'title': 'Study Group Details'}
+        listing = self.object
+        
+        # Check if user can join
+        if self.request.user.is_authenticated:
+            context['can_join'] = self._can_join(listing)
+            context['is_member'] = listing.memberships.filter(
+                student=self.request.user,
+                left_at__isnull=True
+            ).exists()
+            context['is_owner'] = listing.owner == self.request.user
+            context['has_requested'] = listing.join_requests.filter(
+                student=self.request.user,
+                status='requested'
+            ).exists()
+        
+        # Get members
+        context['members'] = listing.memberships.filter(left_at__isnull=True).select_related('student')
+        
         return context
     
-    def get_object(self):
-        return None
+    def _can_join(self, listing):
+        """Check if user can join the listing"""
+        if not self.request.user.is_authenticated:
+            return False
+        if listing.status != 'open' or listing.current_size >= listing.capacity:
+            return False
+        if listing.memberships.filter(student=self.request.user, left_at__isnull=True).exists():
+            return False
+        if listing.join_requests.filter(student=self.request.user, status='requested').exists():
+            return False
+        return True
+
     
 class ListingCreateView(LoginRequiredMixin, CreateView):
     model = BuddyListing
@@ -233,7 +300,52 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
         )
         messages.success(self.request, 'Listing created successfully!')
         return super().form_valid(form)
+@login_required
+def listing_map(request):
+    """Map view of study group listings"""
+    context = {
+        'template_data': {
+            'title': 'Study Groups Map',
+            'GOOGLE_MAPS_API_KEY': settings.GOOGLE_MAPS_API_KEY,
+        }
+    }
+    return render(request, 'buddies/map.html', context)
 
+
+@csrf_exempt
+def api_filter_by_distance(request):
+    """Return listings within a given distance"""
+    try:
+        lat = float(request.GET.get('lat'))
+        lng = float(request.GET.get('lng'))
+        max_distance = float(request.GET.get('distance', 10))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'Invalid coordinates'}, status=400)
+    
+    listings = BuddyListing.objects.filter(
+        status='open',
+        location__isnull=False,
+        location__latitude__isnull=False,
+        location__longitude__isnull=False
+    ).select_related('location', 'course', 'university')
+    
+    filtered_listings = []
+    for listing in listings:
+        dist = haversine(lat, lng, float(listing.location.latitude), float(listing.location.longitude))
+        if dist <= max_distance:
+            filtered_listings.append({
+                'id': listing.id,
+                'slug': listing.slug,
+                'title': listing.title,
+                'course': listing.course.code,
+                'latitude': float(listing.location.latitude),
+                'longitude': float(listing.location.longitude),
+                'distance': round(dist, 2),
+                'current_size': listing.current_size,
+                'capacity': listing.capacity,
+            })
+    
+    return JsonResponse({'listings': filtered_listings})
 
 @login_required
 def request_thread(request, pk):
@@ -301,34 +413,3 @@ def group_chat(request, slug):
     return render(request, 'buddies/group_chat.html', {'template_data': template_data})
 
 
-class ListingDetailView(DetailView):
-    model = BuddyListing
-    template_name = 'buddies/detail.html'
-    context_object_name = 'listing'
-    slug_field = 'slug'
-    slug_url_kwarg = 'slug'
-    
-    def get_queryset(self):
-        return BuddyListing.objects.select_related('course', 'university', 'location', 'owner')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        listing = self.object
-        
-        # Check if user can join
-        if self.request.user.is_authenticated:
-            context['can_join'] = self._can_join(listing)
-            context['is_member'] = listing.memberships.filter(
-                student=self.request.user,
-                left_at__isnull=True
-            ).exists()
-            context['is_owner'] = listing.owner == self.request.user
-            context['has_requested'] = listing.join_requests.filter(
-                student=self.request.user,
-                status='requested'
-            ).exists()
-        
-        # Get members
-        context['members'] = listing.memberships.filter(left_at__isnull=True).select_related('student')
-        
-        return context
