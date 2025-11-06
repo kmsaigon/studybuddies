@@ -1,13 +1,33 @@
 {% extends 'base.html' %}
+
 {% block content %}
-<div class="p-3">
-    <div class="container">
-        <div class="row mt-3">
-            <div class="col-md-8 mx-auto text-center">
-                <h2 class="mb-4">This page is under construction</h2>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>My Listings</h2>
+        <a href="{% url 'buddies:listing_create' %}" class="btn btn-primary">Create New Listing</a>
+    </div>
+    
+    {% if listings %}
+    <div class="row">
+        {% for listing in listings %}
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5><a href="{% url 'buddies:listing_detail' slug=listing.slug %}">{{ listing.title }}</a></h5>
+                    <p><strong>Course:</strong> {{ listing.course.code }}</p>
+                    <p><strong>Status:</strong> <span class="badge bg-{% if listing.status == 'open' %}success{% elif listing.status == 'filled' %}warning{% else %}danger{% endif %}">{{ listing.get_status_display }}</span></p>
+                    <p><strong>Size:</strong> {{ listing.current_size }}/{{ listing.capacity }}</p>
+                    <a href="{% url 'buddies:listing_detail' slug=listing.slug %}" class="btn btn-sm btn-primary">View</a>
+                    <a href="{% url 'buddies:listing_edit' slug=listing.slug %}" class="btn btn-sm btn-secondary">Edit</a>
+                </div>
             </div>
         </div>
+        {% endfor %}
     </div>
+    {% else %}
+    <p>You haven't created any listings yet.</p>
+    <a href="{% url 'buddies:listing_create' %}" class="btn btn-primary">Create Your First Listing</a>
+    {% endif %}
 </div>
 {% endblock content %}
 

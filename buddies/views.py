@@ -1,9 +1,15 @@
-from django.shortcuts import render
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.views.generic import ListView, DetailView, CreateView, UpdateView
-from django.http import JsonResponse
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.http import HttpResponseForbidden, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse, reverse_lazy
+from django.views.generic import CreateView, DetailView, ListView, UpdateView
+from django.conf import settings
+import json
+
 from .forms import ListingForm, ListingSearchForm
-from .models import BuddyListing
+from .models import BuddyListing, JoinRequest, GroupMembership, Message
 from profiles.models import Profile, University
 from locations.models import Location
 
@@ -201,6 +207,32 @@ class ListingDetailView(DetailView):
     
     def get_object(self):
         return None
+    
+class ListingCreateView(LoginRequiredMixin, CreateView):
+    model = BuddyListing
+    form_class = ListingForm
+    template_name = 'buddies/listing_form.html'
+    success_url = reverse_lazy('buddies:my_listings')
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+    
+    def form_valid(self, form):
+        form.instance.owner = self.request.user
+        # Set university from course if not set
+        if not form.instance.university and form.instance.course:
+            form.instance.university = form.instance.course.university
+        # Create initial membership for owner
+        listing = form.save()
+        GroupMembership.objects.create(
+            listing=listing,
+            student=self.request.user,
+            role='owner'
+        )
+        messages.success(self.request, 'Listing created successfully!')
+        return super().form_valid(form)
 
 
 @login_required

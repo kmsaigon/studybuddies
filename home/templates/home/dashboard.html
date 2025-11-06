@@ -3,8 +3,17 @@
 <div class="p-3">
     <div class="container">
         <div class="row mt-3">
-            <div class="col-md-8 mx-auto text-center">
-                <h2 class="mb-4">This page is under construction</h2>
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card shadow">
+                        <div class="card-body text-center">
+                            <h5>Ready to create a study group?</h5>
+                            <a href="{% url 'buddies:listing_create' %}" class="btn btn-primary btn-lg mt-2">
+                                <i class="fas fa-plus me-2"></i>Create a Listing
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
