@@ -545,6 +545,54 @@ def leave_group(request, slug):
         'listing': listing
     })
 
+@login_required
+def listing_map(request):
+    """Map view of study group listings"""
+    context = {
+        'template_data': {
+            'title': 'Study Groups Map',
+            'GOOGLE_MAPS_API_KEY': settings.GOOGLE_MAPS_API_KEY,
+        }
+    }
+    return render(request, 'buddies/map.html', context)
+
+
+@csrf_exempt
+def api_filter_by_distance(request):
+    """Return listings within a given distance"""
+    try:
+        lat = float(request.GET.get('lat'))
+        lng = float(request.GET.get('lng'))
+        max_distance = float(request.GET.get('distance', 10))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'Invalid coordinates'}, status=400)
+    
+    listings = BuddyListing.objects.filter(
+        status='open',
+        location__isnull=False,
+        location__latitude__isnull=False,
+        location__longitude__isnull=False
+    ).select_related('location', 'course', 'university')
+    
+    filtered_listings = []
+    for listing in listings:
+        dist = haversine(lat, lng, float(listing.location.latitude), float(listing.location.longitude))
+        if dist <= max_distance:
+            filtered_listings.append({
+                'id': listing.id,
+                'slug': listing.slug,
+                'title': listing.title,
+                'course': listing.course.code,
+                'latitude': float(listing.location.latitude),
+                'longitude': float(listing.location.longitude),
+                'distance': round(dist, 2),
+                'current_size': listing.current_size,
+                'capacity': listing.capacity,
+            })
+    
+    return JsonResponse({'listings': filtered_listings})
+
+
 
 @login_required
 def request_thread(request, pk):
