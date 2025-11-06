@@ -1,0 +1,45 @@
+.bg-index{
+    background: url("/static/img/blueBackground.jpeg") no-repeat fixed;
+    background-size: 100% auto;
+}
+.navbar a.nav-link {
+    color: #FFFEF6 !important;
+}
+.nav-separator{
+    display:inline-block;
+    width:1px;
+    height:1.25em; /* match approx text height so it visually centers */
+    margin: 0 12px;
+    background-color: rgba(255,255,255,0.15);
+    vertical-align: middle;
+}
+.navbar .navbar-nav {
+    align-items: center;
+    display: flex;
+}
+.bg-dark {
+    background-color: #2E2E2E !important;
+}
+.ms-footer {
+    background-color: #202020;
+}
+.ms-footer p {
+    color: #7F7F7F;
+    font-size: 13px;
+}
+.ms-footer a:hover {
+    color: rgb(172, 206, 250);
+    text-decoration: none;
+}
+.ms-footer-bottom span {
+    font-size: 13px;
+    line-height: 38px;
+}
+.ms-footer-bottom a {
+    color: rgb(172, 206, 250);
+    text-decoration: none;
+}
+.ms-footer-bottom a:hover {
+    color: #FFF;
+}
+
