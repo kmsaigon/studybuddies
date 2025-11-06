@@ -4,8 +4,14 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
+from django.db.models import Q, Count, F
+from django.core.paginator import Paginator
 from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.dateparse import parse_time
+from math import radians, sin, cos, sqrt, atan2
 from django.utils import timezone
 from django.db.models import F
 import json
@@ -158,16 +164,29 @@ class ListingSearchView(ListView):
             queryset = queryset.order_by(sort_by)
         
         return queryset
+    def get_context_data(self, **kwargs):
+            context = super().get_context_data(**kwargs)
+            context['form'] = ListingSearchForm(self.request.GET)
+            context['GOOGLE_MAPS_API_KEY'] = settings.GOOGLE_MAPS_API_KEY
+            
+            # Add user's current groups if authenticated
+            if self.request.user.is_authenticated:
+                context['my_groups'] = GroupMembership.objects.filter(
+                    student=self.request.user,
+                    left_at__isnull=True
+                ).select_related('listing')
+            
+            return context
 
-
-def listing_map(request):
-    template_data = {'title': 'Study Groups Map'}
-    return render(request, 'buddies/map.html', {'template_data': template_data})
-
-
-def api_filter_by_distance(request):
-    return JsonResponse({'listings': []})
-
+def haversine(lat1, lon1, lat2, lon2):
+    """Calculate the distance (miles) between two lat/lon points."""
+    R = 3958.8  # Radius of Earth in miles
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return R * c
 
 class MyListingsView(LoginRequiredMixin, ListView):
     template_name = 'buddies/my_listings.html'
@@ -525,6 +544,54 @@ def leave_group(request, slug):
         'template_data': template_data,
         'listing': listing
     })
+
+@login_required
+def listing_map(request):
+    """Map view of study group listings"""
+    context = {
+        'template_data': {
+            'title': 'Study Groups Map',
+            'GOOGLE_MAPS_API_KEY': settings.GOOGLE_MAPS_API_KEY,
+        }
+    }
+    return render(request, 'buddies/map.html', context)
+
+
+@csrf_exempt
+def api_filter_by_distance(request):
+    """Return listings within a given distance"""
+    try:
+        lat = float(request.GET.get('lat'))
+        lng = float(request.GET.get('lng'))
+        max_distance = float(request.GET.get('distance', 10))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'Invalid coordinates'}, status=400)
+    
+    listings = BuddyListing.objects.filter(
+        status='open',
+        location__isnull=False,
+        location__latitude__isnull=False,
+        location__longitude__isnull=False
+    ).select_related('location', 'course', 'university')
+    
+    filtered_listings = []
+    for listing in listings:
+        dist = haversine(lat, lng, float(listing.location.latitude), float(listing.location.longitude))
+        if dist <= max_distance:
+            filtered_listings.append({
+                'id': listing.id,
+                'slug': listing.slug,
+                'title': listing.title,
+                'course': listing.course.code,
+                'latitude': float(listing.location.latitude),
+                'longitude': float(listing.location.longitude),
+                'distance': round(dist, 2),
+                'current_size': listing.current_size,
+                'capacity': listing.capacity,
+            })
+    
+    return JsonResponse({'listings': filtered_listings})
+
 
 
 @login_required
