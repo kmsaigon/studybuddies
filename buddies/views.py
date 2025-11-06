@@ -230,7 +230,6 @@ class ListingUpdateView(UpdateView):
 
 
 class ListingDetailView(DetailView):
-   class ListingDetailView(DetailView):
     model = BuddyListing
     template_name = 'buddies/detail.html'
     context_object_name = 'listing'

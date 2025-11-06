@@ -70,157 +70,77 @@ class ListingSearchForm(forms.Form):
     queryset=Course.objects.filter(is_active=True),
     required=False,
     widget=forms.Select(attrs={'class': 'form-select'})
-)
+    )
 
-university = forms.ModelChoiceField(
-    queryset=University.objects.all(),
-    required=False,
-    widget=forms.Select(attrs={'class': 'form-select'})
-)
+    university = forms.ModelChoiceField(
+        queryset=University.objects.all(),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
 
-modality = forms.ChoiceField(
-    choices=[('', 'Any')] + list(BuddyListing.MODALITY_CHOICES),
-    required=False,
-    widget=forms.Select(attrs={'class': 'form-select'})
-)
+    modality = forms.ChoiceField(
+        choices=[('', 'Any')] + list(BuddyListing.MODALITY_CHOICES),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
 
-weekday = forms.ChoiceField(
-    choices=[('', 'Any')] + list(BuddyListing.WEEKDAY_CHOICES),
-    required=False,
-    widget=forms.Select(attrs={'class': 'form-select'})
-)
+    weekday = forms.ChoiceField(
+        choices=[('', 'Any')] + list(BuddyListing.WEEKDAY_CHOICES),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
 
-time_range = forms.CharField(
-    required=False,
-    widget=forms.TextInput(attrs={
-        'class': 'form-control',
-        'placeholder': 'e.g., 18:00-20:00'
-    }),
-    help_text='Time range (HH:MM-HH:MM)'
-)
+    time_range = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g., 18:00-20:00'
+        }),
+        help_text='Time range (HH:MM-HH:MM)'
+    )
 
-distance = forms.ChoiceField(
-    choices=[
-        ('', 'Any distance'),
-        ('5', 'Within 5 miles'),
-        ('10', 'Within 10 miles'),
-        ('25', 'Within 25 miles'),
-        ('50', 'Within 50 miles'),
-    ],
-    required=False,
-    widget=forms.Select(attrs={'class': 'form-select'})
-)
+    distance = forms.ChoiceField(
+        choices=[
+            ('', 'Any distance'),
+            ('5', 'Within 5 miles'),
+            ('10', 'Within 10 miles'),
+            ('25', 'Within 25 miles'),
+            ('50', 'Within 50 miles'),
+        ],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
 
-capacity_remaining = forms.BooleanField(
-    required=False,
-    widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-    label='Only show listings with available spots'
-)
+    capacity_remaining = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        label='Only show listings with available spots'
+    )
 
-status = forms.ChoiceField(
-    choices=[('', 'All')] + list(BuddyListing.STATUS_CHOICES),
-    required=False,
-    widget=forms.Select(attrs={'class': 'form-select'}),
-    initial='open'
-)
+    status = forms.ChoiceField(
+        choices=[('', 'All')] + list(BuddyListing.STATUS_CHOICES),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        initial='open'
+    )
 
-# Hidden fields for distance filtering
-user_lat = forms.FloatField(
-    required=False,
-    widget=forms.HiddenInput()
-)
-user_lng = forms.FloatField(
-    required=False,
-    widget=forms.HiddenInput()
-)
+    # Hidden fields for distance filtering
+    user_lat = forms.FloatField(
+        required=False,
+        widget=forms.HiddenInput()
+    )
+    user_lng = forms.FloatField(
+        required=False,
+        widget=forms.HiddenInput()
+    )
 
-sort_by = forms.ChoiceField(
-    choices=[
-        ('-created_at', 'Newest First'),
-        ('created_at', 'Oldest First'),
-        ('distance', 'Distance'),
-    ],
-    required=False,
-    initial='-created_at',
-    widget=forms.Select(attrs={'class': 'form-select'})
-)
-class ListingSearchForm(forms.Form):
-    course = forms.ModelChoiceField(
-    queryset=Course.objects.filter(is_active=True),
-    required=False,
-    widget=forms.Select(attrs={'class': 'form-select'})
-)
-
-university = forms.ModelChoiceField(
-    queryset=University.objects.all(),
-    required=False,
-    widget=forms.Select(attrs={'class': 'form-select'})
-)
-
-modality = forms.ChoiceField(
-    choices=[('', 'Any')] + list(BuddyListing.MODALITY_CHOICES),
-    required=False,
-    widget=forms.Select(attrs={'class': 'form-select'})
-)
-
-weekday = forms.ChoiceField(
-    choices=[('', 'Any')] + list(BuddyListing.WEEKDAY_CHOICES),
-    required=False,
-    widget=forms.Select(attrs={'class': 'form-select'})
-)
-
-time_range = forms.CharField(
-    required=False,
-    widget=forms.TextInput(attrs={
-        'class': 'form-control',
-        'placeholder': 'e.g., 18:00-20:00'
-    }),
-    help_text='Time range (HH:MM-HH:MM)'
-)
-
-distance = forms.ChoiceField(
-    choices=[
-        ('', 'Any distance'),
-        ('5', 'Within 5 miles'),
-        ('10', 'Within 10 miles'),
-        ('25', 'Within 25 miles'),
-        ('50', 'Within 50 miles'),
-    ],
-    required=False,
-    widget=forms.Select(attrs={'class': 'form-select'})
-)
-
-capacity_remaining = forms.BooleanField(
-    required=False,
-    widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-    label='Only show listings with available spots'
-)
-
-status = forms.ChoiceField(
-    choices=[('', 'All')] + list(BuddyListing.STATUS_CHOICES),
-    required=False,
-    widget=forms.Select(attrs={'class': 'form-select'}),
-    initial='open'
-)
-
-# Hidden fields for distance filtering
-user_lat = forms.FloatField(
-    required=False,
-    widget=forms.HiddenInput()
-)
-
-user_lng = forms.FloatField(
-    required=False,
-    widget=forms.HiddenInput()
-)
-
-sort_by = forms.ChoiceField(
-    choices=[
-        ('-created_at', 'Newest First'),
-        ('created_at', 'Oldest First'),
-        ('distance', 'Distance'),
-    ],
-    required=False,
-    initial='-created_at',
-    widget=forms.Select(attrs={'class': 'form-select'})
-)
+    sort_by = forms.ChoiceField(
+        choices=[
+            ('-created_at', 'Newest First'),
+            ('created_at', 'Oldest First'),
+            ('distance', 'Distance'),
+        ],
+        required=False,
+        initial='-created_at',
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
