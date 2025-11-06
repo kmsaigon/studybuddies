@@ -1,13 +1,33 @@
 {% extends 'base.html' %}
+
 {% block content %}
-<div class="p-3">
-    <div class="container">
-        <div class="row mt-3">
-            <div class="col-md-8 mx-auto text-center">
-                <h2 class="mb-4">This page is under construction</h2>
+<div class="container mt-4">
+    <h2>My Groups</h2>
+    
+    {% if memberships %}
+    <div class="row">
+        {% for membership in memberships %}
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5><a href="{% url 'buddies:listing_detail' slug=membership.listing.slug %}">{{ membership.listing.title }}</a></h5>
+                    <p><strong>Course:</strong> {{ membership.listing.course.code }}</p>
+                    <p><strong>Role:</strong> {{ membership.get_role_display }}</p>
+                    <p><strong>Joined:</strong> {{ membership.joined_at|date }}</p>
+                    <a href="{% url 'buddies:listing_detail' slug=membership.listing.slug %}" class="btn btn-sm btn-primary">View</a>
+                    <a href="{% url 'buddies:group_chat' slug=membership.listing.slug %}" class="btn btn-sm btn-info">Chat</a>
+                    {% if membership.role != 'owner' %}
+                    <a href="{% url 'buddies:leave_group' slug=membership.listing.slug %}" class="btn btn-sm btn-danger">Leave</a>
+                    {% endif %}
+                </div>
             </div>
         </div>
+        {% endfor %}
     </div>
+    {% else %}
+    <p>You haven't joined any groups yet.</p>
+    <a href="{% url 'buddies:listing_search' %}" class="btn btn-primary">Find a Study Group</a>
+    {% endif %}
 </div>
 {% endblock content %}
 
