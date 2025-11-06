@@ -1,10 +1,26 @@
 {% extends 'base.html' %}
 {% block content %}
+{% load static %}
 <div class="p-3">
     <div class="container">
         <div class="row mt-3">
-            <div class="col-md-8 mx-auto text-center">
-                <h2 class="mb-4">This page is under construction</h2>
+            <div class="col-md-6 mx-auto mb-3">
+                <h2>About StudyBuddies</h2>
+                <hr />
+                <p>
+                    StudyBuddies helps university students connect with peers in the same courses
+                    to form study groups. Find study partners based on your university, courses,
+                    location, availability, and study preferences.
+                </p>
+                <p>
+                    Map-based discovery, course matching, and simple group management make it
+                    easy to find study groups that fit your schedule and learning style.
+                </p>
+            </div>
+            <div class="col-md-6 mx-auto mb-3 text-center">
+                {% if static %}
+                <img src="{% static 'img/about.jpg' %}" class="max-width-100" alt="about" />
+                {% endif %}
             </div>
         </div>
     </div>
