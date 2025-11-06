@@ -1,13 +1,112 @@
-{% extends 'base.html' %}
+{{% extends 'base.html' %}
+{% load static %}
+
 {% block content %}
-<div class="p-3">
-    <div class="container">
-        <div class="row mt-3">
-            <div class="col-md-8 mx-auto text-center">
-                <h2 class="mb-4">This page is under construction</h2>
+<div class="container mt-4">
+    <h2>Find a Study Group</h2>
+    
+    <!-- Search Form -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    {{ form.course.label_tag }}
+                    {{ form.course }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.university.label_tag }}
+                    {{ form.university }}
+                </div>
+                <div class="col-md-2">
+                    {{ form.modality.label_tag }}
+                    {{ form.modality }}
+                </div>
+                <div class="col-md-2">
+                    {{ form.weekday.label_tag }}
+                    {{ form.weekday }}
+                </div>
+                <div class="col-md-2">
+                    {{ form.time_range.label_tag }}
+                    {{ form.time_range }}
+                    {% if form.time_range.help_text %}
+                    <small class="form-text text-muted">{{ form.time_range.help_text }}</small>
+                    {% endif %}
+                </div>
+                <div class="col-md-2">
+                    {{ form.status.label_tag }}
+                    {{ form.status }}
+                </div>
+                <div class="col-md-12">
+                    <div class="form-check">
+                        {{ form.capacity_remaining }}
+                        <label class="form-check-label" for="{{ form.capacity_remaining.id_for_label }}">
+                            {{ form.capacity_remaining.label }}
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-12">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    <a href="{% url 'buddies:listing_map' %}" class="btn btn-outline-secondary">View Map</a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Results -->
+    <div class="row">
+        <div class="col-md-8">
+            {% if listings %}
+                {% for listing in listings %}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5><a href="{% url 'buddies:listing_detail' slug=listing.slug %}">{{ listing.title }}</a></h5>
+                        <p><strong>Course:</strong> {{ listing.course.code }} - {{ listing.course.name }}</p>
+                        <p><strong>University:</strong> {{ listing.university.name }}</p>
+                        <p><strong>Modality:</strong> {{ listing.get_modality_display }}</p>
+                        {% if listing.weekday %}
+                        <p><strong>Schedule:</strong> {{ listing.get_weekday_display }} {{ listing.start_time|time }} - {{ listing.end_time|time }}</p>
+                        {% endif %}
+                        <p><strong>Size:</strong> {{ listing.current_size }}/{{ listing.capacity }}</p>
+                        <a href="{% url 'buddies:listing_detail' slug=listing.slug %}" class="btn btn-sm btn-primary">View Details</a>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                <!-- Pagination -->
+                {% if is_paginated %}
+                <nav>
+                    <ul class="pagination">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
+                        {% endif %}
+                        <li class="page-item"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+                        {% if page_obj.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            {% else %}
+                <p>No study groups found. Try adjusting your search criteria.</p>
+            {% endif %}
+        </div>
+        
+        <div class="col-md-4">
+            {% if my_groups %}
+            <div class="card">
+                <div class="card-header">
+                    <h5>Your Current Groups</h5>
+                </div>
+                <div class="card-body">
+                    {% for membership in my_groups %}
+                    <p><a href="{% url 'buddies:listing_detail' slug=membership.listing.slug %}">{{ membership.listing.title }}</a></p>
+                    {% endfor %}
+                </div>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
 {% endblock content %}
+
 
