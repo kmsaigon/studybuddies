@@ -1,13 +1,65 @@
 {% extends 'base.html' %}
+{% load buddy_extras %}
+
 {% block content %}
-<div class="p-3">
-    <div class="container">
-        <div class="row mt-3">
-            <div class="col-md-8 mx-auto text-center">
-                <h2 class="mb-4">This page is under construction</h2>
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <h2>{{ listing.title }}</h2>
+            <p><strong>Course:</strong> {{ listing.course.code }} - {{ listing.course.name }}</p>
+            <p><strong>University:</strong> {{ listing.university.name }}</p>
+            <p><strong>Owner:</strong> {{ listing.owner.username }}</p>
+            <p><strong>Modality:</strong> {{ listing.get_modality_display }}</p>
+            <p><strong>Cadence:</strong> {{ listing.get_cadence_display }}</p>
+            {% if listing.weekday %}
+            <p><strong>Schedule:</strong> {{ listing.get_weekday_display }} {{ listing.start_time|time }} - {{ listing.end_time|time }}</p>
+            {% endif %}
+            <p><strong>Size:</strong> {{ listing.current_size }}/{{ listing.capacity }}</p>
+            {% if listing.tags %}
+            <p><strong>Tags:</strong> {{ listing.tags }}</p>
+            {% endif %}
+            
+            <hr>
+            <h4>Description</h4>
+            <p>{{ listing.description|linebreaks }}</p>
+            
+            <hr>
+            <h4>Members ({{ members|length }})</h4>
+            <ul>
+                {% for member in members %}
+                <li>{{ member.student.username }} ({{ member.get_role_display }})</li>
+                {% endfor %}
+            </ul>
+            
+            {% if is_owner %}
+            <div class="mt-4">
+                <a href="{% url 'buddies:listing_edit' slug=listing.slug %}" class="btn btn-primary">Edit Listing</a>
+                <a href="{% url 'buddies:roster' slug=listing.slug %}" class="btn btn-secondary">Manage Roster</a>
+                <a href="{% url 'buddies:requests_queue' slug=listing.slug %}" class="btn btn-info">View Requests</a>
+                {% if listing.status == 'open' %}
+                <a href="{% url 'buddies:close_listing' slug=listing.slug %}" class="btn btn-warning">Close Listing</a>
+                {% endif %}
+                <a href="{% url 'buddies:cancel_listing' slug=listing.slug %}" class="btn btn-danger">Cancel Listing</a>
             </div>
+            {% elif is_member %}
+            <div class="mt-4">
+                <a href="{% url 'buddies:group_chat' slug=listing.slug %}" class="btn btn-primary">Group Chat</a>
+                <a href="{% url 'buddies:leave_group' slug=listing.slug %}" class="btn btn-danger">Leave Group</a>
+            </div>
+            {% elif can_join %}
+            <div class="mt-4">
+                <a href="{% url 'buddies:request_join' slug=listing.slug %}" class="btn btn-success">Join Group</a>
+            </div>
+            {% elif has_requested %}
+            <div class="mt-4">
+                <p class="text-info">You have requested to join this group.</p>
+                <a href="{% url 'buddies:withdraw_request' slug=listing.slug %}" class="btn btn-warning">Withdraw Request</a>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
 {% endblock content %}
+
+
 
