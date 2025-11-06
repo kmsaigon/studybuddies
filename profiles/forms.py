@@ -1,6 +1,7 @@
 from django import forms
 from django.forms.utils import ErrorList
 from django.utils.safestring import mark_safe
+from django.db import OperationalError, connection
 from .models import Profile, University, Course
 
 
@@ -37,20 +38,52 @@ class ProfileEditForm(forms.ModelForm):
             'visibility': forms.Select(attrs={'class': 'form-select'}),
         }
     
+    def _table_exists(self, model):
+        """Check if a model's database table exists"""
+        try:
+            table_name = model._meta.db_table
+            with connection.cursor() as cursor:
+                cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+                return cursor.fetchone() is not None
+        except Exception:
+            return False
+    
     def __init__(self, *args, **kwargs):
         super(ProfileEditForm, self).__init__(*args, **kwargs)
         
         # Limit courses to active courses (handle case where table doesn't exist)
-        try:
-            self.fields['current_courses'].queryset = Course.objects.filter(is_active=True)
-        except Exception:
-            # Table doesn't exist yet - use empty queryset
-            self.fields['current_courses'].queryset = Course.objects.none()
+        if self._table_exists(Course):
+            try:
+                self.fields['current_courses'].queryset = Course.objects.filter(is_active=True)
+            except Exception:
+                self.fields['current_courses'] = forms.MultipleChoiceField(
+                    choices=[],
+                    required=False,
+                    widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': '5', 'disabled': True})
+                )
+        else:
+            # Table doesn't exist yet - replace with empty ChoiceField
+            self.fields['current_courses'] = forms.MultipleChoiceField(
+                choices=[],
+                required=False,
+                widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': '5', 'disabled': True})
+            )
         
         # Set university ordering (handle case where table doesn't exist)
-        try:
-            self.fields['university'].queryset = University.objects.all().order_by('name')
-        except Exception:
-            # Table doesn't exist yet - use empty queryset
-            self.fields['university'].queryset = University.objects.none()
+        if self._table_exists(University):
+            try:
+                self.fields['university'].queryset = University.objects.all().order_by('name')
+            except Exception:
+                self.fields['university'] = forms.ChoiceField(
+                    choices=[('', 'Please run migrations first')],
+                    required=False,
+                    widget=forms.Select(attrs={'class': 'form-select', 'disabled': True})
+                )
+        else:
+            # Table doesn't exist yet - replace with empty ChoiceField
+            self.fields['university'] = forms.ChoiceField(
+                choices=[('', 'Please run migrations first')],
+                required=False,
+                widget=forms.Select(attrs={'class': 'form-select', 'disabled': True})
+            )
 
