@@ -56,10 +56,14 @@ class ListingSearchView(ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        # Start with open listings by default
-        queryset = BuddyListing.objects.filter(status='open').select_related(
+        # Start with all active listings (exclude cancelled)
+        queryset = BuddyListing.objects.exclude(status='cancelled').select_related(
             'course', 'university', 'location', 'owner'
         )
+        
+        # Initialize variables for potential use outside form validation
+        user_lat = None
+        user_lng = None
         
         # Apply filters from form
         form = ListingSearchForm(self.request.GET)
@@ -100,17 +104,19 @@ class ListingSearchView(ListView):
                 except (ValueError, AttributeError):
                     pass  # Invalid time format, skip filter
             
-            # Capacity filter
+            # Capacity filter - only show listings with available spots when checked
+            # This will exclude filled groups when the checkbox is selected
             if cleaned_data.get('capacity_remaining'):
                 queryset = queryset.filter(current_size__lt=F('capacity'))
             
-            # Status filter
-            if cleaned_data.get('status'):
-                queryset = queryset.filter(status=cleaned_data['status'])
+            # Status filter - only apply when a specific status is selected (not "All")
+            status = cleaned_data.get('status')
+            if status:  # Empty string means "All", so we show all statuses
+                queryset = queryset.filter(status=status)
             
             # Distance filter
-            user_lat = cleaned_data.get('user_lat')
-            user_lng = cleaned_data.get('user_lng')
+            user_lat = cleaned_data.get('user_lat') or None
+            user_lng = cleaned_data.get('user_lng') or None
             distance = cleaned_data.get('distance')
             
             if user_lat and user_lng and distance:
