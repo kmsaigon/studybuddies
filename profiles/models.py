@@ -49,7 +49,7 @@ class Course(models.Model):
 
 class Profile(models.Model):
     GRADE_LEVEL_CHOICES = [
-        ("frosh", "First-year"),
+        ("fresh", "Freshman"),
         ("soph", "Sophomore"),
         ("jun", "Junior"),
         ("sen", "Senior"),
