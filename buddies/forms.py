@@ -121,7 +121,7 @@ class ListingSearchForm(forms.Form):
         choices=[('', 'All')] + list(BuddyListing.STATUS_CHOICES),
         required=False,
         widget=forms.Select(attrs={'class': 'form-select'}),
-        initial='open'
+        initial=''
     )
 
     # Hidden fields for distance filtering
