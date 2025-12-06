@@ -200,3 +200,65 @@ class GroupRating(models.Model):
     def __str__(self):
         return f"{self.student.username} rated {self.listing.title} - {self.rating} stars"
 
+
+class Bookmark(models.Model):
+    """Bookmarks for study group listings"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="bookmarks")
+    listing = models.ForeignKey(BuddyListing, on_delete=models.CASCADE, related_name="bookmarked_by")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ("user", "listing")
+        indexes = [
+            Index(fields=["user", "created_at"]),
+        ]
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.user.username} bookmarked {self.listing.title}"
+
+
+class Conversation(models.Model):
+    """Direct messaging conversations between users"""
+    participant1 = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="conversations_as_participant1")
+    participant2 = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="conversations_as_participant2")
+    listing = models.ForeignKey(BuddyListing, on_delete=models.CASCADE, related_name="conversations", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ("participant1", "participant2", "listing")
+        indexes = [
+            Index(fields=["participant1", "updated_at"]),
+            Index(fields=["participant2", "updated_at"]),
+        ]
+        ordering = ['-updated_at']
+    
+    def get_other_participant(self, user):
+        """Get the other participant in the conversation"""
+        if user == self.participant1:
+            return self.participant2
+        return self.participant1
+    
+    def __str__(self):
+        listing_str = f" about {self.listing.title}" if self.listing else ""
+        return f"Conversation between {self.participant1.username} and {self.participant2.username}{listing_str}"
+
+
+class DirectMessage(models.Model):
+    """Individual messages within a conversation"""
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="messages")
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    body = models.TextField()
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            Index(fields=["conversation", "created_at"]),
+        ]
+        ordering = ['created_at']
+    
+    def __str__(self):
+        return f"Message from {self.sender.username} in conversation {self.conversation.id}"
+

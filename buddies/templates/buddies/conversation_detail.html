@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-0">
+                                {% if conversation.listing %}
+                                    {{ conversation.listing.title }}
+                                {% else %}
+                                    Conversation with {{ other_participant.username }}
+                                {% endif %}
+                            </h4>
+                            {% if conversation.listing %}
+                            <small>
+                                <a href="{% url 'buddies:listing_detail' conversation.listing.slug %}" class="text-white">
+                                    View Study Group →
+                                </a>
+                            </small>
+                            {% endif %}
+                        </div>
+                        <a href="{% url 'buddies:my_inbox' %}" class="btn btn-light btn-sm">
+                            Back to Inbox
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                    {% if messages %}
+                        {% for message in messages %}
+                        <div class="mb-3 {% if message.sender == user %}text-end{% endif %}">
+                            <div class="d-inline-block {% if message.sender == user %}bg-primary text-white{% else %}bg-light{% endif %} p-3 rounded" style="max-width: 70%;">
+                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                    <strong class="{% if message.sender == user %}text-white{% endif %}">
+                                        {{ message.sender.username }}
+                                    </strong>
+                                    <small class="{% if message.sender == user %}text-white-50{% else %}text-muted{% endif %} ms-2">
+                                        {{ message.created_at|date:"M d, Y g:i A" }}
+                                    </small>
+                                </div>
+                                <p class="mb-0 {% if message.sender == user %}text-white{% endif %}">
+                                    {{ message.body|linebreaks }}
+                                </p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted text-center py-4">No messages yet. Start the conversation!</p>
+                    {% endif %}
+                </div>
+                
+                <div class="card-footer">
+                    <form method="post" action="{% url 'buddies:send_message' conversation.id %}">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            {{ form.body }}
+                            {% if form.body.errors %}
+                                <div class="text-danger small">{{ form.body.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <button type="submit" class="btn btn-primary">Send Message</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+

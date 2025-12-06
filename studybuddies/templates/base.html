@@ -43,6 +43,10 @@
                             <span class="nav-separator"></span>
                             <a class="nav-link" href="{% url 'buddies:listing_search' %}">Find a Study Group</a>
                             <span class="nav-separator"></span>
+                            <a class="nav-link" href="{% url 'buddies:my_bookmarks' %}">Bookmarks</a>
+                            <span class="nav-separator"></span>
+                            <a class="nav-link" href="{% url 'buddies:my_inbox' %}">Messages</a>
+                            <span class="nav-separator"></span>
                             {% if user|has_profile %}
                                 <a class="nav-link" href="{% url 'profiles:profiles.detail' %}">Profile</a>
                             {% else %}

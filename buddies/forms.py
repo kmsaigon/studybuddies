@@ -162,3 +162,39 @@ class RatingForm(forms.ModelForm):
             'rating': 'Rate this study group from 1 to 5 stars',
             'feedback': 'Provide detailed feedback about your experience',
         }
+
+
+class MessageForm(forms.Form):
+    """Form for sending direct messages"""
+    body = forms.CharField(
+        widget=forms.Textarea(attrs={
+            'rows': 4,
+            'class': 'form-control',
+            'placeholder': 'Type your message here...'
+        }),
+        label='Message',
+        max_length=2000,
+        help_text='Maximum 2000 characters'
+    )
+
+
+class BookmarkFilterForm(forms.Form):
+    """Form for filtering bookmarked listings"""
+    course = forms.ModelChoiceField(
+        queryset=Course.objects.filter(is_active=True),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    
+    university = forms.ModelChoiceField(
+        queryset=University.objects.all(),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    
+    status = forms.ChoiceField(
+        choices=[('', 'All')] + list(BuddyListing.STATUS_CHOICES),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        initial=''
+    )

@@ -69,10 +69,25 @@
                         <p><strong>Size:</strong> {{ listing.current_size }}/{{ listing.capacity }}</p>
                         
                         <!-- Action Buttons -->
-                        <div class="d-flex gap-2">
+                        <div class="d-flex gap-2 align-items-center">
                             <a href="{% url 'buddies:listing_detail' slug=listing.slug %}" class="btn btn-sm btn-primary">View Details</a>
                             
                             {% if user.is_authenticated %}
+                                {% if listing.id in bookmarked_ids %}
+                                <form method="post" action="{% url 'buddies:toggle_bookmark' listing.slug %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Remove bookmark">
+                                        <i class="fas fa-bookmark"></i>
+                                    </button>
+                                </form>
+                                {% else %}
+                                <form method="post" action="{% url 'buddies:toggle_bookmark' listing.slug %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Bookmark this study group">
+                                        <i class="far fa-bookmark"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
                                 <a href="{% url 'buddies:request_join' slug=listing.slug %}" class="btn btn-sm btn-success">Join</a>
                             {% endif %}
                         </div>

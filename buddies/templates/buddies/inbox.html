@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>My Messages</h2>
+    <p class="text-muted">View and manage your conversations</p>
+    
+    {% if conversations %}
+    <div class="row">
+        <div class="col-12">
+            {% for conversation in conversations %}
+            <div class="card mb-3 {% if conversation.unread_count > 0 %}border-primary{% endif %}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h5 class="card-title mb-2">
+                                <a href="{% url 'buddies:conversation_detail' conversation.id %}" class="text-decoration-none">
+                                    {% if conversation.listing %}
+                                        {{ conversation.listing.title }}
+                                    {% else %}
+                                        Conversation with 
+                                        {% if conversation.participant1 == user %}
+                                            {{ conversation.participant2.username }}
+                                        {% else %}
+                                            {{ conversation.participant1.username }}
+                                        {% endif %}
+                                    {% endif %}
+                                </a>
+                                {% if conversation.unread_count > 0 %}
+                                <span class="badge bg-primary ms-2">{{ conversation.unread_count }} new</span>
+                                {% endif %}
+                            </h5>
+                            
+                            <p class="card-text mb-1">
+                                <strong>With:</strong> 
+                                {% if conversation.participant1 == user %}
+                                    {{ conversation.participant2.username }}
+                                {% else %}
+                                    {{ conversation.participant1.username }}
+                                {% endif %}
+                            </p>
+                            
+                            {% if conversation.listing %}
+                            <p class="card-text mb-1 text-muted small">
+                                <strong>Study Group:</strong> {{ conversation.listing.course.code }} - {{ conversation.listing.course.name }}
+                            </p>
+                            {% endif %}
+                            
+                            {% if conversation.last_message %}
+                            <p class="card-text text-muted small mb-0">
+                                Last message: {{ conversation.last_message.body|truncatewords:15 }}
+                            </p>
+                            <p class="card-text text-muted small">
+                                {{ conversation.updated_at|timesince }} ago
+                            </p>
+                            {% else %}
+                            <p class="card-text text-muted small">No messages yet</p>
+                            {% endif %}
+                        </div>
+                        
+                        <div>
+                            <a href="{% url 'buddies:conversation_detail' conversation.id %}" class="btn btn-primary btn-sm">
+                                Open Conversation
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <nav aria-label="Page navigation">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1">First</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+            </li>
+            {% endif %}
+            
+            <li class="page-item active">
+                <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            </li>
+            
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+    
+    {% else %}
+    <!-- Empty State -->
+    <div class="text-center py-5">
+        <div class="mb-4">
+            <svg width="80" height="80" fill="currentColor" class="text-muted" viewBox="0 0 16 16">
+                <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4Zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2Zm13 2.383-4.708 2.825L15 11.105V5.383Zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741ZM1 11.105l4.708-2.897L1 5.383v5.722Z"/>
+            </svg>
+        </div>
+        <h4 class="text-muted">No Messages</h4>
+        <p class="text-muted">You don't have any conversations yet. Start messaging study group creators to ask questions!</p>
+        <a href="{% url 'buddies:listing_search' %}" class="btn btn-primary btn-lg mt-3">
+            Browse Study Groups
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock content %}
+

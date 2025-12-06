@@ -16,8 +16,8 @@ from django.utils import timezone
 from django.db.models import F
 import json
 
-from .forms import ListingForm, ListingSearchForm, RatingForm
-from .models import BuddyListing, JoinRequest, GroupMembership, Message, GroupRating
+from .forms import ListingForm, ListingSearchForm, RatingForm, MessageForm, BookmarkFilterForm
+from .models import BuddyListing, JoinRequest, GroupMembership, Message, GroupRating, Bookmark, Conversation, DirectMessage
 from profiles.models import Profile, University
 from locations.models import Location
 
@@ -181,6 +181,15 @@ class ListingSearchView(ListView):
                     student=self.request.user,
                     left_at__isnull=True
                 ).select_related('listing')
+                
+                # Get bookmarked listing IDs for current user
+                bookmarked_ids = set(
+                    Bookmark.objects.filter(user=self.request.user)
+                    .values_list('listing_id', flat=True)
+                )
+                context['bookmarked_ids'] = bookmarked_ids
+            else:
+                context['bookmarked_ids'] = set()
             
             return context
 
@@ -388,9 +397,35 @@ class ListingDetailView(DetailView):
             context['can_rate'] = listing.memberships.filter(
                 student=self.request.user
             ).exists() or listing.owner == self.request.user
+            
+            # Check if listing is bookmarked
+            context['is_bookmarked'] = Bookmark.objects.filter(
+                user=self.request.user,
+                listing=listing
+            ).exists()
+            
+            # Check for existing conversation with owner
+            if not context['is_owner']:
+                conversation = Conversation.objects.filter(
+                    listing=listing,
+                    participant1__in=[self.request.user, listing.owner],
+                    participant2__in=[self.request.user, listing.owner]
+                ).first()
+                context['conversation'] = conversation
+                if conversation:
+                    context['unread_count'] = conversation.messages.filter(
+                        sender=listing.owner,
+                        read_at__isnull=True
+                    ).count()
+            else:
+                context['conversation'] = None
+                context['unread_count'] = 0
         else:
             context['user_rating'] = None
             context['can_rate'] = False
+            context['is_bookmarked'] = False
+            context['conversation'] = None
+            context['unread_count'] = 0
         
         return context
 
@@ -874,3 +909,235 @@ def delete_rating(request, slug, rating_id):
         return redirect('buddies:listing_detail', slug=slug)
     
     return redirect('buddies:listing_detail', slug=slug)
+
+
+# Bookmarking Views
+
+@login_required
+def toggle_bookmark(request, slug):
+    """Toggle bookmark status for a listing"""
+    listing = get_object_or_404(BuddyListing, slug=slug)
+    
+    if request.method == 'POST':
+        bookmark, created = Bookmark.objects.get_or_create(
+            user=request.user,
+            listing=listing
+        )
+        
+        if not created:
+            # Bookmark exists, remove it
+            bookmark.delete()
+            action = 'removed'
+        else:
+            action = 'added'
+        
+        # Return JSON for AJAX requests, or redirect for form submissions
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'status': action, 'is_bookmarked': created})
+        
+        messages.success(request, f'Bookmark {action} successfully.')
+        return redirect('buddies:listing_detail', slug=slug)
+    
+    return redirect('buddies:listing_detail', slug=slug)
+
+
+class MyBookmarksView(LoginRequiredMixin, ListView):
+    """View for displaying user's bookmarked listings"""
+    template_name = 'buddies/my_bookmarks.html'
+    context_object_name = 'listings'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        queryset = BuddyListing.objects.filter(
+            bookmarked_by__user=self.request.user
+        ).select_related(
+            'course', 'university', 'location', 'owner'
+        ).distinct().order_by('-bookmarked_by__created_at')
+        
+        # Apply filters
+        form = BookmarkFilterForm(self.request.GET)
+        if form.is_valid():
+            if form.cleaned_data.get('course'):
+                queryset = queryset.filter(course=form.cleaned_data['course'])
+            if form.cleaned_data.get('university'):
+                queryset = queryset.filter(university=form.cleaned_data['university'])
+            if form.cleaned_data.get('status'):
+                queryset = queryset.filter(status=form.cleaned_data['status'])
+        
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form'] = BookmarkFilterForm(self.request.GET)
+        context['template_data'] = {'title': 'My Bookmarked Study Groups'}
+        return context
+
+
+# Messaging Views
+
+@login_required
+def create_or_get_conversation(request, slug):
+    """Create a conversation with listing owner or get existing one"""
+    listing = get_object_or_404(BuddyListing, slug=slug)
+    
+    # Prevent users from messaging themselves
+    if listing.owner == request.user:
+        messages.warning(request, 'You cannot message yourself.')
+        return redirect('buddies:listing_detail', slug=slug)
+    
+    # Get or create conversation
+    conversation = Conversation.objects.filter(
+        listing=listing,
+        participant1__in=[request.user, listing.owner],
+        participant2__in=[request.user, listing.owner]
+    ).first()
+    
+    if not conversation:
+        # Create new conversation
+        # Ensure participant1 < participant2 for consistency
+        if request.user.id < listing.owner.id:
+            participant1, participant2 = request.user, listing.owner
+        else:
+            participant1, participant2 = listing.owner, request.user
+        
+        conversation = Conversation.objects.create(
+            participant1=participant1,
+            participant2=participant2,
+            listing=listing
+        )
+    
+    return redirect('buddies:conversation_detail', conversation_id=conversation.id)
+
+
+@login_required
+def send_message(request, conversation_id):
+    """Send a message in a conversation"""
+    conversation = get_object_or_404(Conversation, pk=conversation_id)
+    
+    # Verify user is a participant
+    if request.user not in [conversation.participant1, conversation.participant2]:
+        messages.error(request, 'You do not have permission to access this conversation.')
+        return redirect('buddies:my_inbox')
+    
+    if request.method == 'POST':
+        form = MessageForm(request.POST)
+        if form.is_valid():
+            DirectMessage.objects.create(
+                conversation=conversation,
+                sender=request.user,
+                body=form.cleaned_data['body']
+            )
+            # Update conversation timestamp
+            conversation.save()  # This will update updated_at
+            messages.success(request, 'Message sent successfully.')
+            return redirect('buddies:conversation_detail', conversation_id=conversation.id)
+    else:
+        form = MessageForm()
+    
+    return redirect('buddies:conversation_detail', conversation_id=conversation.id)
+
+
+class MyInboxView(LoginRequiredMixin, ListView):
+    """View for displaying user's conversations"""
+    template_name = 'buddies/inbox.html'
+    context_object_name = 'conversations'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        # Get all conversations where user is a participant
+        queryset = Conversation.objects.filter(
+            Q(participant1=self.request.user) | Q(participant2=self.request.user)
+        ).select_related(
+            'participant1', 'participant2', 'listing', 'listing__course', 'listing__university'
+        ).prefetch_related('messages').order_by('-updated_at')
+        
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['template_data'] = {'title': 'My Messages'}
+        
+        # Calculate unread counts for each conversation and add as attribute
+        total_unread = 0
+        for conversation in context['conversations']:
+            other_participant = conversation.get_other_participant(self.request.user)
+            unread_count = conversation.messages.filter(
+                sender=other_participant,
+                read_at__isnull=True
+            ).count()
+            conversation.unread_count = unread_count
+            total_unread += unread_count
+            
+            # Get last message
+            last_message = conversation.messages.order_by('-created_at').first()
+            conversation.last_message = last_message
+        
+        context['total_unread'] = total_unread
+        
+        return context
+
+
+class ConversationDetailView(LoginRequiredMixin, DetailView):
+    """View for displaying a conversation thread"""
+    model = Conversation
+    template_name = 'buddies/conversation_detail.html'
+    context_object_name = 'conversation'
+    pk_url_kwarg = 'conversation_id'
+    
+    def get_queryset(self):
+        # Only allow access to conversations where user is a participant
+        return Conversation.objects.filter(
+            Q(participant1=self.request.user) | Q(participant2=self.request.user)
+        ).select_related('participant1', 'participant2', 'listing').prefetch_related('messages', 'messages__sender')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        conversation = self.object
+        
+        # Verify user is a participant
+        if self.request.user not in [conversation.participant1, conversation.participant2]:
+            messages.error(self.request, 'You do not have permission to access this conversation.')
+            return context
+        
+        # Get all messages
+        context['messages'] = conversation.messages.select_related('sender').order_by('created_at')
+        
+        # Get other participant
+        context['other_participant'] = conversation.get_other_participant(self.request.user)
+        
+        # Mark messages as read
+        conversation.messages.filter(
+            sender=context['other_participant'],
+            read_at__isnull=True
+        ).update(read_at=timezone.now())
+        
+        # Form for sending new messages
+        context['form'] = MessageForm()
+        context['template_data'] = {'title': 'Conversation'}
+        
+        return context
+
+
+@login_required
+def mark_messages_read(request, conversation_id):
+    """Mark all messages in a conversation as read"""
+    conversation = get_object_or_404(Conversation, pk=conversation_id)
+    
+    # Verify user is a participant
+    if request.user not in [conversation.participant1, conversation.participant2]:
+        messages.error(request, 'You do not have permission to access this conversation.')
+        return redirect('buddies:my_inbox')
+    
+    if request.method == 'POST':
+        other_participant = conversation.get_other_participant(request.user)
+        conversation.messages.filter(
+            sender=other_participant,
+            read_at__isnull=True
+        ).update(read_at=timezone.now())
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'status': 'success'})
+        
+        messages.success(request, 'Messages marked as read.')
+    
+    return redirect('buddies:conversation_detail', conversation_id=conversation_id)

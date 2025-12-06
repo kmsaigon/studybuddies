@@ -12,11 +12,20 @@ urlpatterns = [
     # Specific routes (must come before slug patterns)
     path('my/', views.MyListingsView.as_view(), name='my_listings'),
     path('my/groups/', views.MyGroupsView.as_view(), name='my_groups'),
+    path('my/bookmarks/', views.MyBookmarksView.as_view(), name='my_bookmarks'),
     path('create/', views.ListingCreateView.as_view(), name='listing_create'),
     path('requests/<int:pk>/chat/', views.request_thread, name='request_thread'),
     
+    # Messaging routes
+    path('messages/', views.MyInboxView.as_view(), name='my_inbox'),
+    path('messages/<int:conversation_id>/', views.ConversationDetailView.as_view(), name='conversation_detail'),
+    path('messages/<int:conversation_id>/send/', views.send_message, name='send_message'),
+    path('messages/<int:conversation_id>/read/', views.mark_messages_read, name='mark_messages_read'),
+    
     # Slug-based routes (detail and actions)
     path('<slug:slug>/', views.ListingDetailView.as_view(), name='listing_detail'),
+    path('<slug:slug>/bookmark/toggle/', views.toggle_bookmark, name='toggle_bookmark'),
+    path('<slug:slug>/message/', views.create_or_get_conversation, name='create_conversation'),
     path('<slug:slug>/edit/', views.ListingUpdateView.as_view(), name='listing_edit'),
     path('<slug:slug>/close/', views.close_listing, name='close_listing'),
     path('<slug:slug>/cancel/', views.cancel_listing, name='cancel_listing'),

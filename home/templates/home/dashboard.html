@@ -3,15 +3,115 @@
 <div class="p-3">
     <div class="container">
         <div class="row mt-3">
-            <div class="row mt-4">
-                <div class="col-12">
-                    <div class="card shadow">
-                        <div class="card-body text-center">
-                            <h5>Ready to create a study group?</h5>
-                            <a href="{% url 'buddies:listing_create' %}" class="btn btn-primary btn-lg mt-2">
-                                <i class="fas fa-plus me-2"></i>Create a Listing
-                            </a>
-                        </div>
+            <div class="col-12">
+                <h2>Dashboard</h2>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <!-- Quick Actions -->
+            <div class="col-md-12 mb-4">
+                <div class="card shadow">
+                    <div class="card-body text-center">
+                        <h5>Ready to create a study group?</h5>
+                        <a href="{% url 'buddies:listing_create' %}" class="btn btn-primary btn-lg mt-2">
+                            <i class="fas fa-plus-circle me-2"></i>Create a Listing
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <!-- Recent Bookmarks -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow">
+                    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Recent Bookmarks</h5>
+                        <a href="{% url 'buddies:my_bookmarks' %}" class="btn btn-sm btn-light">View All</a>
+                    </div>
+                    <div class="card-body">
+                        {% if recent_bookmarks %}
+                            {% for bookmark in recent_bookmarks %}
+                            <div class="mb-3 {% if not forloop.last %}border-bottom pb-3{% endif %}">
+                                <h6 class="mb-1">
+                                    <a href="{% url 'buddies:listing_detail' bookmark.listing.slug %}">
+                                        {{ bookmark.listing.title }}
+                                    </a>
+                                </h6>
+                                <p class="mb-1 small text-muted">
+                                    {{ bookmark.listing.course.code }} • {{ bookmark.listing.university.name }}
+                                </p>
+                                <p class="mb-0 small text-muted">
+                                    Bookmarked {{ bookmark.created_at|timesince }} ago
+                                </p>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted text-center py-3">No bookmarks yet. Start bookmarking study groups you're interested in!</p>
+                            <div class="text-center">
+                                <a href="{% url 'buddies:listing_search' %}" class="btn btn-sm btn-outline-primary">Browse Study Groups</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Messages -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            Recent Messages
+                            {% if total_unread > 0 %}
+                            <span class="badge bg-light text-dark ms-2">{{ total_unread }} new</span>
+                            {% endif %}
+                        </h5>
+                        <a href="{% url 'buddies:my_inbox' %}" class="btn btn-sm btn-light">View All</a>
+                    </div>
+                    <div class="card-body">
+                        {% if recent_conversations %}
+                            {% for conversation in recent_conversations %}
+                            <div class="mb-3 {% if not forloop.last %}border-bottom pb-3{% endif %}">
+                                <h6 class="mb-1">
+                                    <a href="{% url 'buddies:conversation_detail' conversation.id %}">
+                                        {% if conversation.listing %}
+                                            {{ conversation.listing.title }}
+                                        {% else %}
+                                            Conversation with 
+                                            {% if conversation.participant1 == user %}
+                                                {{ conversation.participant2.username }}
+                                            {% else %}
+                                                {{ conversation.participant1.username }}
+                                            {% endif %}
+                                        {% endif %}
+                                    </a>
+                                    {% if conversation.unread_count > 0 %}
+                                    <span class="badge bg-primary">{{ conversation.unread_count }}</span>
+                                    {% endif %}
+                                </h6>
+                                <p class="mb-1 small text-muted">
+                                    {% if conversation.participant1 == user %}
+                                        With: {{ conversation.participant2.username }}
+                                    {% else %}
+                                        With: {{ conversation.participant1.username }}
+                                    {% endif %}
+                                </p>
+                                {% if conversation.messages.all %}
+                                <p class="mb-0 small text-muted">
+                                    Last message {{ conversation.updated_at|timesince }} ago
+                                </p>
+                                {% else %}
+                                <p class="mb-0 small text-muted">No messages yet</p>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted text-center py-3">No messages yet. Start messaging study group creators!</p>
+                            <div class="text-center">
+                                <a href="{% url 'buddies:listing_search' %}" class="btn btn-sm btn-outline-primary">Browse Study Groups</a>
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

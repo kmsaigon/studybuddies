@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>My Bookmarked Study Groups</h2>
+    <p class="text-muted">View and manage your saved study groups</p>
+    
+    <!-- Filter Form -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    {{ form.course.label_tag }}
+                    {{ form.course }}
+                </div>
+                <div class="col-md-4">
+                    {{ form.university.label_tag }}
+                    {{ form.university }}
+                </div>
+                <div class="col-md-4">
+                    {{ form.status.label_tag }}
+                    {{ form.status }}
+                </div>
+                <div class="col-md-12">
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                    <a href="{% url 'buddies:my_bookmarks' %}" class="btn btn-outline-secondary">Clear Filters</a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Bookmarked Listings -->
+    {% if listings %}
+    <div class="row">
+        {% for listing in listings %}
+        <div class="col-md-6 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0">{{ listing.title }}</h5>
+                        <small>{{ listing.course.code }} - {{ listing.course.name }}</small>
+                    </div>
+                    <form method="post" action="{% url 'buddies:toggle_bookmark' listing.slug %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-light" title="Remove bookmark">
+                            <i class="fas fa-bookmark"></i>
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="card-body">
+                    <p class="mb-2">
+                        <strong>🏫 University:</strong> {{ listing.university.name }}
+                    </p>
+                    
+                    <p class="mb-2">
+                        <strong>📍 Modality:</strong> 
+                        <span class="text-capitalize">{{ listing.get_modality_display }}</span>
+                        {% if listing.location %}
+                        • {{ listing.location.name }}
+                        {% endif %}
+                    </p>
+                    
+                    {% if listing.cadence == 'weekly' and listing.weekday %}
+                    <p class="mb-2">
+                        <strong>📅 Schedule:</strong> 
+                        {{ listing.get_weekday_display }}
+                        {% if listing.start_time %}
+                        {{ listing.start_time|time:"g:i A" }}
+                        {% if listing.end_time %}
+                        - {{ listing.end_time|time:"g:i A" }}
+                        {% endif %}
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                    
+                    <p class="mb-2">
+                        <strong>👥 Members:</strong> {{ listing.current_size }}/{{ listing.capacity }}
+                    </p>
+                    
+                    <p class="mb-2">
+                        <strong>Status:</strong> 
+                        <span class="badge 
+                            {% if listing.status == 'open' %}bg-success
+                            {% elif listing.status == 'filled' %}bg-warning text-dark
+                            {% else %}bg-secondary{% endif %}">
+                            {{ listing.get_status_display }}
+                        </span>
+                    </p>
+                    
+                    {% if listing.description %}
+                    <p class="mb-0 text-muted small">{{ listing.description|truncatewords:20 }}</p>
+                    {% endif %}
+                </div>
+                
+                <div class="card-footer bg-light">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'buddies:listing_detail' listing.slug %}" class="btn btn-primary btn-sm">
+                            View Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <nav aria-label="Page navigation">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% if request.GET.university %}&university={{ request.GET.university }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">First</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% if request.GET.university %}&university={{ request.GET.university }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Previous</a>
+            </li>
+            {% endif %}
+            
+            <li class="page-item active">
+                <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            </li>
+            
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% if request.GET.university %}&university={{ request.GET.university }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Next</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% if request.GET.university %}&university={{ request.GET.university }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Last</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+    
+    {% else %}
+    <!-- Empty State -->
+    <div class="text-center py-5">
+        <div class="mb-4">
+            <svg width="80" height="80" fill="currentColor" class="text-muted" viewBox="0 0 16 16">
+                <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+            </svg>
+        </div>
+        <h4 class="text-muted">No Bookmarked Study Groups</h4>
+        <p class="text-muted">You haven't bookmarked any study groups yet. Start browsing to find groups you're interested in!</p>
+        <a href="{% url 'buddies:listing_search' %}" class="btn btn-primary btn-lg mt-3">
+            Browse Study Groups
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock content %}
+
