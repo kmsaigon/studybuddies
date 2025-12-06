@@ -106,7 +106,7 @@ class CustomUserAdmin(BaseUserAdmin):
     list_display = ['username', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'date_joined']
     list_filter = ['is_active', 'is_staff', 'is_superuser', 'date_joined']
     actions = ['deactivate_users', 'activate_users', 'ban_users']
-
+""""
 def deactivate_users(self, request, queryset):
     queryset.update(is_active=False)
     self.message_user(request, f"{queryset.count()} users deactivated.")
@@ -126,6 +126,6 @@ def ban_users(self, request, queryset):
         )
     self.message_user(request, f"{queryset.count()} users banned and removed from all groups.")
 ban_users.short_description = "Ban selected users (deactivate + remove from groups)"
-
+"""
 admin.site.unregister(User)
 admin.site.register(User, CustomUserAdmin)
