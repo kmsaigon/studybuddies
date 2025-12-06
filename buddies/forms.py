@@ -1,5 +1,5 @@
 from django import forms
-from .models import BuddyListing, JoinRequest, Message
+from .models import BuddyListing, JoinRequest, Message, GroupRating
 from profiles.models import University, Course
 from locations.models import Location
 
@@ -144,3 +144,21 @@ class ListingSearchForm(forms.Form):
         initial='-created_at',
         widget=forms.Select(attrs={'class': 'form-select'})
     )
+
+
+class RatingForm(forms.ModelForm):
+    class Meta:
+        model = GroupRating
+        fields = ['rating', 'feedback']
+        widgets = {
+            'rating': forms.Select(attrs={'class': 'form-select'}),
+            'feedback': forms.Textarea(attrs={'rows': 5, 'class': 'form-control', 'placeholder': 'Share your experience with this study group...'}),
+        }
+        labels = {
+            'rating': 'Rating',
+            'feedback': 'Feedback',
+        }
+        help_texts = {
+            'rating': 'Rate this study group from 1 to 5 stars',
+            'feedback': 'Provide detailed feedback about your experience',
+        }

@@ -28,5 +28,7 @@ urlpatterns = [
     path('<slug:slug>/withdraw/', views.withdraw_request, name='withdraw_request'),
     path('<slug:slug>/leave/', views.leave_group, name='leave_group'),
     path('<slug:slug>/chat/', views.group_chat, name='group_chat'),
+    path('<slug:slug>/rate/', views.rate_group, name='rate_group'),
+    path('<slug:slug>/ratings/<int:rating_id>/delete/', views.delete_rating, name='delete_rating'),
 ]
 

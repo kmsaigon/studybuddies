@@ -16,8 +16,8 @@ from django.utils import timezone
 from django.db.models import F
 import json
 
-from .forms import ListingForm, ListingSearchForm
-from .models import BuddyListing, JoinRequest, GroupMembership, Message
+from .forms import ListingForm, ListingSearchForm, RatingForm
+from .models import BuddyListing, JoinRequest, GroupMembership, Message, GroupRating
 from profiles.models import Profile, University
 from locations.models import Location
 
@@ -367,6 +367,30 @@ class ListingDetailView(DetailView):
         # Get member count
         context['member_count'] = context['members'].count()
         context['spots_available'] = listing.capacity - context['member_count']
+        
+        # Get ratings and feedback
+        context['ratings'] = listing.ratings.select_related('student', 'student__profile').order_by('-created_at')
+        context['rating_count'] = context['ratings'].count()
+        
+        # Calculate average rating
+        if context['rating_count'] > 0:
+            avg = sum(r.rating for r in context['ratings']) / context['rating_count']
+            context['average_rating'] = avg
+            context['average_rating_int'] = round(avg)
+        else:
+            context['average_rating'] = None
+            context['average_rating_int'] = 0
+        
+        # Check if user has already rated
+        if self.request.user.is_authenticated:
+            context['user_rating'] = listing.ratings.filter(student=self.request.user).first()
+            # Check if user was/is a member (can only rate if they were a member)
+            context['can_rate'] = listing.memberships.filter(
+                student=self.request.user
+            ).exists() or listing.owner == self.request.user
+        else:
+            context['user_rating'] = None
+            context['can_rate'] = False
         
         return context
 
@@ -794,3 +818,59 @@ def group_chat(request, slug):
         'listing': listing,
         'messages': chat_messages
     })
+
+
+@login_required
+def rate_group(request, slug):
+    """Rate a study group and provide feedback"""
+    listing = get_object_or_404(BuddyListing, slug=slug)
+    
+    # Check if user was/is a member or owner (can only rate if they were involved)
+    is_member = listing.memberships.filter(student=request.user).exists()
+    is_owner = listing.owner == request.user
+    
+    if not is_member and not is_owner:
+        messages.error(request, 'You must be or have been a member of this group to rate it.')
+        return redirect('buddies:listing_detail', slug=slug)
+    
+    # Get existing rating if any
+    existing_rating = listing.ratings.filter(student=request.user).first()
+    
+    if request.method == 'POST':
+        form = RatingForm(request.POST, instance=existing_rating)
+        if form.is_valid():
+            rating = form.save(commit=False)
+            rating.listing = listing
+            rating.student = request.user
+            rating.save()
+            
+            if existing_rating:
+                messages.success(request, 'Your rating has been updated.')
+            else:
+                messages.success(request, 'Thank you for rating this study group!')
+            
+            return redirect('buddies:listing_detail', slug=slug)
+    else:
+        form = RatingForm(instance=existing_rating)
+    
+    template_data = {'title': f'Rate {listing.title}'}
+    return render(request, 'buddies/rating_form.html', {
+        'template_data': template_data,
+        'listing': listing,
+        'form': form,
+        'existing_rating': existing_rating
+    })
+
+
+@login_required
+def delete_rating(request, slug, rating_id):
+    """Delete a rating"""
+    listing = get_object_or_404(BuddyListing, slug=slug)
+    rating = get_object_or_404(GroupRating, pk=rating_id, listing=listing, student=request.user)
+    
+    if request.method == 'POST':
+        rating.delete()
+        messages.success(request, 'Your rating has been deleted.')
+        return redirect('buddies:listing_detail', slug=slug)
+    
+    return redirect('buddies:listing_detail', slug=slug)

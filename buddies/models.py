@@ -172,3 +172,31 @@ class Message(models.Model):
             return f"Message in {self.listing.title} from {self.sender.username}"
         return f"Message in request {self.join_request.id} from {self.sender.username}"
 
+
+class GroupRating(models.Model):
+    """Ratings and feedback posts for study groups"""
+    RATING_CHOICES = [
+        (1, "1 Star"),
+        (2, "2 Stars"),
+        (3, "3 Stars"),
+        (4, "4 Stars"),
+        (5, "5 Stars"),
+    ]
+    
+    listing = models.ForeignKey(BuddyListing, on_delete=models.CASCADE, related_name="ratings")
+    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="ratings")
+    rating = models.PositiveSmallIntegerField(choices=RATING_CHOICES, help_text="Rating from 1 to 5 stars")
+    feedback = models.TextField(help_text="Feedback about the study group")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ("listing", "student")
+        indexes = [
+            Index(fields=["listing", "created_at"]),
+        ]
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.student.username} rated {self.listing.title} - {self.rating} stars"
+
