@@ -30,6 +30,89 @@
                 {% endfor %}
             </ul>
             
+            <!-- RATINGS AND FEEDBACK SECTION -->
+            <hr>
+            <h4>Ratings & Feedback</h4>
+            {% if average_rating %}
+                <div class="mb-3">
+                    <strong>Average Rating:</strong> 
+                    <span class="text-warning">
+                        {% for i in "12345" %}
+                            {% if forloop.counter <= average_rating_int %}
+                                ★
+                            {% else %}
+                                ☆
+                            {% endif %}
+                        {% endfor %}
+                    </span>
+                    <span class="ms-2">{{ average_rating|floatformat:1 }} ({{ rating_count }} rating{{ rating_count|pluralize }})</span>
+                </div>
+            {% else %}
+                <p class="text-muted">No ratings yet. Be the first to rate this study group!</p>
+            {% endif %}
+            
+            {% if user.is_authenticated %}
+                {% if can_rate %}
+                    {% if user_rating %}
+                        <div class="alert alert-info">
+                            <strong>You rated this group:</strong> 
+                            <span class="text-warning">
+                                {% for i in "12345" %}
+                                    {% if forloop.counter <= user_rating.rating %}
+                                        ★
+                                    {% else %}
+                                        ☆
+                                    {% endif %}
+                                {% endfor %}
+                            </span>
+                            <div class="mt-2">
+                                <a href="{% url 'buddies:rate_group' slug=listing.slug %}" class="btn btn-sm btn-primary">Edit Rating</a>
+                                <form method="post" action="{% url 'buddies:delete_rating' slug=listing.slug rating_id=user_rating.id %}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete your rating?')">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-danger">Delete Rating</button>
+                                </form>
+                            </div>
+                        </div>
+                    {% else %}
+                        <a href="{% url 'buddies:rate_group' slug=listing.slug %}" class="btn btn-primary">Rate This Group</a>
+                    {% endif %}
+                {% endif %}
+            {% else %}
+                <p class="text-muted"><a href="{% url 'account_login' %}?next={{ request.path }}">Sign in</a> to rate this study group.</p>
+            {% endif %}
+            
+            {% if ratings %}
+                <div class="mt-4">
+                    <h5>Recent Feedback</h5>
+                    {% for rating in ratings|slice:":5" %}
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <strong>{{ rating.student.username }}</strong>
+                                        <span class="text-warning ms-2">
+                                            {% for i in "12345" %}
+                                                {% if forloop.counter <= rating.rating %}
+                                                    ★
+                                                {% else %}
+                                                    ☆
+                                                {% endif %}
+                                            {% endfor %}
+                                        </span>
+                                    </div>
+                                    <small class="text-muted">{{ rating.created_at|date:"M d, Y" }}</small>
+                                </div>
+                                <p class="mb-0">{{ rating.feedback|linebreaks }}</p>
+                            </div>
+                        </div>
+                    {% endfor %}
+                    {% if rating_count > 5 %}
+                        <p class="text-muted">Showing 5 of {{ rating_count }} ratings</p>
+                    {% endif %}
+                </div>
+            {% endif %}
+            <!-- END RATINGS AND FEEDBACK SECTION -->
+            
             <!-- ENHANCED BUTTONS SECTION -->
             <hr>
             {% if user.is_authenticated %}

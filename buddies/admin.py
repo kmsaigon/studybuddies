@@ -2,7 +2,7 @@ from django.contrib import admin
 
 # Import models - will work once models are imported
 try:
-    from .models import BuddyListing, JoinRequest, GroupMembership, ListingStatusHistory, Message
+    from .models import BuddyListing, JoinRequest, GroupMembership, ListingStatusHistory, Message, GroupRating
     
     @admin.register(BuddyListing)
     class BuddyListingAdmin(admin.ModelAdmin):
@@ -43,6 +43,15 @@ try:
         list_filter = ['created_at']
         search_fields = ['body', 'sender__username']
         readonly_fields = ['created_at']
+    
+    
+    @admin.register(GroupRating)
+    class GroupRatingAdmin(admin.ModelAdmin):
+        list_display = ['student', 'listing', 'rating', 'created_at']
+        list_filter = ['rating', 'created_at']
+        search_fields = ['student__username', 'listing__title', 'feedback']
+        readonly_fields = ['created_at', 'updated_at']
+        date_hierarchy = 'created_at'
 except ImportError:
     # Models don't exist yet - admin registrations will be available once models are imported
     pass
